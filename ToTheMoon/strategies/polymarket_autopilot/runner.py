@@ -5,7 +5,7 @@ from .storage import PaperTradingStore
 
 
 if __name__ == "__main__":
-    base_path = Path("tothemoon/strategies/polymarket_autopilot")
+    base_path = Path("ToTheMoon/strategies/polymarket_autopilot")
     store = PaperTradingStore(
         db_path=base_path / "data" / "paper_trading.db",
         starting_capital=StrategyConfig().starting_capital,

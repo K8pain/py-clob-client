@@ -1,4 +1,4 @@
-"""Trading strategies for the ToTheMoon paper-trading prototype."""
+"""Trading strategies and strategy packages for ToTheMoon."""
 
 from .mean_reversion import MeanReversionPaperStrategy, StrategyConfig
 from .polymarket_mvp import (

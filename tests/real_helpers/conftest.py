@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-HELPERS_DIR = ROOT / "To the moon" / "real_helpers"
+HELPERS_DIR = ROOT / "tothemoon" / "real_helpers"
 
 
 def load_helper_module(module_name: str):

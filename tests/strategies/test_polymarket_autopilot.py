@@ -1,7 +1,7 @@
 from datetime import date
 from pathlib import Path
 
-from strategies.polymarket_autopilot import (
+from tothemoon.strategies.polymarket_autopilot import (
     MarketSnapshot,
     PaperTradingStore,
     PolymarketAutopilot,

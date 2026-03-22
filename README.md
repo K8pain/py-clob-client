@@ -8,6 +8,10 @@ Python client for the Polymarket Central Limit Order Book (CLOB).
 
 ## Documentation
 
+- Human-readable docs hub: `docs/index.html`
+- High-level design: `docs/HLD.html`
+- LLM contributor guide: `docs/LLM.html`
+
 ## Installation
 
 ```bash

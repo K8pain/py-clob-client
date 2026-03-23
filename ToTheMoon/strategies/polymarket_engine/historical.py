@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterable
 
-import httpx
+from ToTheMoon.api import PolymarketHttpClient, RateLimitPolicy
 
 from .models import PricePoint, TokenCatalogEntry
 from .storage import CsvStore
@@ -21,6 +21,8 @@ class HistoricalDownloader:
         self.history_path = history_path
         self.store = store
         self._fetch_json = fetch_json or self._default_fetch_json
+        self.http_client = PolymarketHttpClient(timeout=30.0)
+        self.http_client.register_limit(RateLimitPolicy("clob-prices-history", 800, 10.0))
 
     def download_for_tokens(self, tokens: Iterable[TokenCatalogEntry], interval: str = "1h") -> list[PricePoint]:
         collected: list[PricePoint] = []
@@ -35,10 +37,8 @@ class HistoricalDownloader:
             collected.extend(points)
         return collected
 
-    @staticmethod
-    def _default_fetch_json(url: str, params: dict[str, Any]) -> Any:
-        response = httpx.get(url, params=params, timeout=30.0)
-        response.raise_for_status()
+    def _default_fetch_json(self, url: str, params: dict[str, Any]) -> Any:
+        response = self.http_client.get(url, params=params, policy_name="clob-prices-history")
         return response.json()
 
 

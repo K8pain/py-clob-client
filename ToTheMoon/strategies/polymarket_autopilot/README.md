@@ -26,8 +26,8 @@ Permite probar tres heurísticas simples sobre mercados activos:
 
 ## Persistencia
 
-- Base de datos: `ToTheMoon/strategies/polymarket_autopilot/data/paper_trading.db`
-- Log diario: `ToTheMoon/strategies/polymarket_autopilot/logs/polymarket-autopilot.log`
+- Base de datos: `ToTheMoon/strategies/polymarket_autopilot/data/paper_trading.db` (relativa al directorio del propio script/módulo)
+- Log diario: `ToTheMoon/strategies/polymarket_autopilot/logs/polymarket-autopilot.log` (relativo al directorio del propio script/módulo)
 
 ## Seguridad
 

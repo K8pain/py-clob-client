@@ -130,13 +130,13 @@ Además del `.env`, hay estrategias con configuración en código:
 
 ### 3.4 Persistencia local que debes conocer
 
-Estos archivos o rutas se generan o usan durante pruebas:
+Estos archivos o rutas se generan o usan durante pruebas. En ejecución normal, cada script usa rutas relativas a su propio directorio; en tests se puede inyectar `tmp_path` u otro directorio temporal:
 
 - `ToTheMoon/state.json`
 - `ToTheMoon/paper_trades.json`
 - `ToTheMoon/strategies/polymarket_autopilot/data/paper_trading.db`
 - `ToTheMoon/strategies/polymarket_autopilot/logs/polymarket-autopilot.log`
-- `data/polymarket_engine/...` o el path temporal que uses en tests
+- `ToTheMoon/strategies/polymarket_engine/data/...` o el path temporal que uses en tests
 
 ### 3.5 Checklist de configuración previa por tipo de ejecución
 
@@ -346,7 +346,7 @@ pytest tests/polymarket_engine/test_engine.py -q
 - descubre mercados con `get_simplified_markets`,
 - toma `yes_token_id`,
 - evalúa thresholds `buy_below` y `sell_above`,
-- escribe en `ToTheMoon/state.json` y `ToTheMoon/paper_trades.json`.
+- escribe en `ToTheMoon/state.json` y `ToTheMoon/paper_trades.json`, resolviéndolos desde el directorio del paquete `ToTheMoon`.
 
 ### Cómo probarlo
 

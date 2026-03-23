@@ -13,7 +13,7 @@
   6. Persiste estado y trades en JSON.
 
 ## 2) UX / flujo de uso
-- **Happy flow**: ejecutar `run_once()` cada 15 min (cron), revisar `paper_trades.json` y `state.json`.
+- **Happy flow**: ejecutar `run_once()` cada 15 min (cron), revisar `ToTheMoon/paper_trades.json` y `ToTheMoon/state.json`.
 - **Alternative flow**: si no hay mercados elegibles o no hay señal, no se genera trade.
 - **MVP**: sin UI visual todavía; salida en archivos JSON para inspección rápida.
 

@@ -21,7 +21,7 @@ class RiskConfig:
 
 @dataclass(frozen=True)
 class StorageConfig:
-    base_dir: Path = Path("data/polymarket_engine")
+    base_dir: Path = field(default_factory=lambda: Path(__file__).resolve().parent / "data")
     catalog_dir: Path = Path("catalog")
     history_dir: Path = Path("historical")
     execution_dir: Path = Path("execution")

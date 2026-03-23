@@ -54,3 +54,8 @@
   - gestión multi-posiciones
   - métricas por activo
   - integración de dashboard web
+
+
+## Operación y rate limits
+
+Para el inventario completo de programas de `ToTheMoon`, la guía de ejecución sin API key y la estrategia de cumplimiento de rate limits públicos/privados, ver `ToTheMoon/RATE_LIMITING_AND_OPERATIONS.md`.

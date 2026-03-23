@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -23,8 +23,8 @@ class StrategyConfig:
     sell_above: float = 0.60
     stake_usd: float = 10.0
     max_consecutive_losses: int = 3
-    state_file: str = "ToTheMoon/state.json"
-    trades_file: str = "ToTheMoon/paper_trades.json"
+    state_file: Path = field(default_factory=lambda: Path(__file__).resolve().parent.parent / "state.json")
+    trades_file: Path = field(default_factory=lambda: Path(__file__).resolve().parent.parent / "paper_trades.json")
 
 
 @dataclass

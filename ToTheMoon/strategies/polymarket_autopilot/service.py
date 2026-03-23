@@ -9,6 +9,8 @@ from typing import Any
 
 import httpx
 
+from ToTheMoon.api import PolymarketHttpClient, RateLimitPolicy
+
 from .models import MarketSnapshot, SignalDirection, StrategyName, TradeSignal
 from .storage import PaperTradingStore
 
@@ -26,6 +28,8 @@ class StrategyConfig:
     spread_threshold: float = 1.05
     profit_target: float = 0.07
     summary_channel: str = "#polymarket-autopilot"
+    gamma_markets_limit: int = 250
+    gamma_window_seconds: float = 10.0
 
 
 class PolymarketAutopilot:
@@ -52,6 +56,8 @@ class PolymarketAutopilot:
         self.config = config or StrategyConfig(starting_capital=store.starting_capital)
         self.market_api_url = market_api_url
         self.client = client
+        self.http_client = PolymarketHttpClient(timeout=10.0, client=client) if client is not None else PolymarketHttpClient(timeout=10.0)
+        self.http_client.register_limit(RateLimitPolicy("gamma-markets", self.config.gamma_markets_limit, self.config.gamma_window_seconds))
         self.log_directory.mkdir(parents=True, exist_ok=True)
 
     def fetch_market_data(self) -> list[MarketSnapshot]:
@@ -140,15 +146,8 @@ class PolymarketAutopilot:
 
     def _request_market_payload(self) -> Any:
         params = {"limit": self.config.max_markets, "active": "true", "closed": "false"}
-        if self.client is not None:
-            response = self.client.get(self.market_api_url, params=params)
-            response.raise_for_status()
-            return response.json()
-
-        with httpx.Client(timeout=10) as client:
-            response = client.get(self.market_api_url, params=params)
-            response.raise_for_status()
-            return response.json()
+        response = self.http_client.get(self.market_api_url, params=params, policy_name="gamma-markets")
+        return response.json()
 
     def _tail_signals(
         self,

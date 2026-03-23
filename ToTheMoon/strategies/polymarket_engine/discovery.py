@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
-import httpx
+from ToTheMoon.api import PolymarketHttpClient, RateLimitPolicy
 
 from .models import MarketCatalogEntry, TokenCatalogEntry
 
@@ -15,9 +15,11 @@ class DiscoveryResult:
 
 
 class GammaDiscoveryClient:
-    def __init__(self, base_url: str, get_json: Callable[[str], Any] | None = None):
+    def __init__(self, base_url: str, get_json: Callable[[str], Any] | None = None, http_client: PolymarketHttpClient | None = None):
         self.base_url = base_url.rstrip("/")
         self._get_json = get_json or self._default_get_json
+        self.http_client = http_client or PolymarketHttpClient(timeout=30.0)
+        self.http_client.register_limit(RateLimitPolicy("gamma-markets", 250, 10.0))
 
     def fetch_markets(self, path: str = "/markets") -> list[dict[str, Any]]:
         payload = self._get_json(f"{self.base_url}{path}")
@@ -25,10 +27,8 @@ class GammaDiscoveryClient:
             return list(payload["data"])
         return list(payload)
 
-    @staticmethod
-    def _default_get_json(url: str) -> Any:
-        response = httpx.get(url, timeout=30.0)
-        response.raise_for_status()
+    def _default_get_json(self, url: str) -> Any:
+        response = self.http_client.get(url, policy_name="gamma-markets")
         return response.json()
 
 

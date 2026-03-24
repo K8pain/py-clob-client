@@ -122,8 +122,8 @@ Descubrir mercados activos y construir catálogo local reusable.
 ### Snippet de ejecución
 
 ```python
-from polymarket_engine.discovery import GammaDiscoveryClient, discover_catalog
-from polymarket_engine.storage import CsvStore
+from ToTheMoon.strategies.polymarket_engine.discovery import GammaDiscoveryClient, discover_catalog
+from ToTheMoon.strategies.polymarket_engine.storage import CsvStore
 
 store = CsvStore("data/polymarket_engine")
 client = GammaDiscoveryClient("https://gamma-api.polymarket.com")
@@ -155,9 +155,9 @@ Persistir series históricas reproducibles por token.
 ### Snippet
 
 ```python
-from polymarket_engine.historical import HistoricalDownloader
-from polymarket_engine.storage import CsvStore
-from polymarket_engine.models import TokenCatalogEntry
+from ToTheMoon.strategies.polymarket_engine.historical import HistoricalDownloader
+from ToTheMoon.strategies.polymarket_engine.storage import CsvStore
+from ToTheMoon.strategies.polymarket_engine.models import TokenCatalogEntry
 
 store = CsvStore("data/polymarket_engine")
 downloader = HistoricalDownloader(
@@ -206,7 +206,7 @@ Construir candidatos para:
 ### Snippet
 
 ```python
-from polymarket_engine.features import build_incoherence_features, build_tail_features
+from ToTheMoon.strategies.polymarket_engine.features import build_incoherence_features, build_tail_features
 
 incoherence_candidates = build_incoherence_features(tokens_yes_only, prices, threshold=0.08)
 tail_candidates = build_tail_features(tokens_all, prices, threshold=0.92)
@@ -232,9 +232,9 @@ Evitar decisiones con datos inválidos/stale y filtrar por límites.
 ### Snippet
 
 ```python
-from polymarket_engine.signal_engine import build_signal
-from polymarket_engine.risk import evaluate_risk
-from polymarket_engine.normalization import normalize_market_snapshot
+from ToTheMoon.strategies.polymarket_engine.signal_engine import build_signal
+from ToTheMoon.strategies.polymarket_engine.risk import evaluate_risk
+from ToTheMoon.strategies.polymarket_engine.normalization import normalize_market_snapshot
 
 snapshot = normalize_market_snapshot(raw_snapshot, stale_after_seconds=30)
 signal = build_signal(candidate, strategy_config)
@@ -259,7 +259,7 @@ Reproducir lógica core sobre dataset fijo y generar summary.
 ### Snippet
 
 ```python
-from polymarket_engine.backtester import run_backtest
+from ToTheMoon.strategies.polymarket_engine.backtester import run_backtest
 
 summary = run_backtest(candidates, snapshots_by_token, engine_config, store)
 print(summary)
@@ -283,7 +283,7 @@ Simular ejecución con reglas conservadoras y persistencia homogénea.
 ### Snippet
 
 ```python
-from polymarket_engine.execution import PaperExecutionAdapter
+from ToTheMoon.strategies.polymarket_engine.execution import PaperExecutionAdapter
 
 paper = PaperExecutionAdapter(store=store, fee_bps=10)
 order_event, fill = paper.execute(order_request, best_bid=snapshot.best_bid, best_ask=snapshot.best_ask)

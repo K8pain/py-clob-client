@@ -1,7 +1,7 @@
 from datetime import date
 from pathlib import Path
 
-from strategies.polymarket_autopilot import (
+from ToTheMoon.strategies.strategies.polymarket_autopilot import (
     MarketSnapshot,
     PaperTradingStore,
     PolymarketAutopilot,
@@ -129,7 +129,7 @@ def test_publish_daily_summary_writes_channel_report(tmp_path: Path) -> None:
 
 
 def test_runner_run_once_prints_progress(tmp_path: Path, capsys) -> None:
-    from strategies.polymarket_autopilot import runner
+    from ToTheMoon.strategies.strategies.polymarket_autopilot import runner
 
     class StubAutopilot:
         def run_cycle(self) -> dict[str, int]:

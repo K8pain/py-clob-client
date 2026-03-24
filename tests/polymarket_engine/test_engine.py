@@ -1,18 +1,18 @@
 from pathlib import Path
 
-from polymarket_engine.backtester import run_backtest
-from polymarket_engine.config import EngineConfig, RiskConfig, StorageConfig, StrategyConfig
-from polymarket_engine.discovery import discover_catalog
-from polymarket_engine.execution import PaperExecutionAdapter, RealExecutionAdapter
-from polymarket_engine.features import build_incoherence_features, build_tail_features
-from polymarket_engine.historical import HistoricalDownloader
-from polymarket_engine.models import MarketSnapshot, OrderRequest, OrderSide, PositionSide
-from polymarket_engine.normalization import normalize_market_snapshot, validate_catalog
-from polymarket_engine.portfolio import Portfolio
-from polymarket_engine.reporting import summarize_trades
-from polymarket_engine.risk import evaluate_risk
-from polymarket_engine.signal_engine import build_signal
-from polymarket_engine.storage import CsvStore
+from ToTheMoon.strategies.polymarket_engine.backtester import run_backtest
+from ToTheMoon.strategies.polymarket_engine.config import EngineConfig, RiskConfig, StorageConfig, StrategyConfig
+from ToTheMoon.strategies.polymarket_engine.discovery import discover_catalog
+from ToTheMoon.strategies.polymarket_engine.execution import PaperExecutionAdapter, RealExecutionAdapter
+from ToTheMoon.strategies.polymarket_engine.features import build_incoherence_features, build_tail_features
+from ToTheMoon.strategies.polymarket_engine.historical import HistoricalDownloader
+from ToTheMoon.strategies.polymarket_engine.models import MarketSnapshot, OrderRequest, OrderSide, PositionSide
+from ToTheMoon.strategies.polymarket_engine.normalization import normalize_market_snapshot, validate_catalog
+from ToTheMoon.strategies.polymarket_engine.portfolio import Portfolio
+from ToTheMoon.strategies.polymarket_engine.reporting import summarize_trades
+from ToTheMoon.strategies.polymarket_engine.risk import evaluate_risk
+from ToTheMoon.strategies.polymarket_engine.signal_engine import build_signal
+from ToTheMoon.strategies.polymarket_engine.storage import CsvStore
 
 
 def test_end_to_end_engine_flow(tmp_path: Path):

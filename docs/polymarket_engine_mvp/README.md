@@ -1,5 +1,7 @@
 # MVP blueprint: Polymarket Engine para incoherencias y colas
 
+- Guía operativa paso a paso: `docs/polymarket_engine_mvp/how-to-run.md`.
+
 ## 1) Qué estamos construyendo
 
 ### Aplicación / feature

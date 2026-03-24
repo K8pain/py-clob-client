@@ -1,7 +1,7 @@
 from datetime import date
 from pathlib import Path
 
-from ToTheMoon.strategies.polymarket_autopilot import (
+from strategies.polymarket_autopilot import (
     MarketSnapshot,
     PaperTradingStore,
     PolymarketAutopilot,
@@ -126,3 +126,21 @@ def test_publish_daily_summary_writes_channel_report(tmp_path: Path) -> None:
     content = summary_path.read_text(encoding="utf-8")
     assert "#polymarket-autopilot" in content
     assert "paper trading only" in content.lower()
+
+
+def test_runner_run_once_prints_progress(tmp_path: Path, capsys) -> None:
+    from strategies.polymarket_autopilot import runner
+
+    class StubAutopilot:
+        def run_cycle(self) -> dict[str, int]:
+            return {"snapshots": 3, "executed_trades": 1, "closed_positions": 0}
+
+        def publish_daily_summary(self) -> Path:
+            return tmp_path / "polymarket-autopilot.log"
+
+    summary_path = runner.run_once(StubAutopilot())
+    captured = capsys.readouterr().out
+
+    assert summary_path == tmp_path / "polymarket-autopilot.log"
+    assert "ciclo completado" in captured
+    assert "resumen guardado" in captured

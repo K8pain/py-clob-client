@@ -430,3 +430,19 @@ No optimizar demasiado pronto. Primero demostrar que el bot:
 - quotea bien,
 - cancela bien,
 - mide bien.
+
+## Implementación inicial en `bin/`
+
+Esta carpeta ya incluye un runtime funcional de referencia en modo paper dentro de `bin/`:
+
+- `bin/services.py`: discovery, estado de mercado, estado de underlying, señal y risk gates.
+- `bin/paper_engine.py`: creación de órdenes, fill conservador, cancelación y resolución.
+- `bin/storage.py`: persistencia SQLite para mercados, snapshots, decisiones, órdenes, fills y resultados.
+- `bin/runner.py`: orquestador end-to-end (`Mvp1MarketMakerBot`) y ciclo demo.
+- `bin/main.py`: entrypoint ejecutable para validar el flujo MVP con datos mock.
+
+Ejemplo rápido:
+
+```bash
+python -m ToTheMoon.strategies.mvp1_market_maker.bin.main
+```

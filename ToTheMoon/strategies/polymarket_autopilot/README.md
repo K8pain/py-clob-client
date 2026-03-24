@@ -38,5 +38,7 @@ Permite probar tres heurísticas simples sobre mercados activos:
 ## Ejecución rápida
 
 ```bash
-python -m ToTheMoon.strategies.polymarket_autopilot.runner
+python -m ToTheMoon.strategies.polymarket_autopilot.runner --mode once --simulation-days 360
 ```
+
+> Nota: el reporte diario lista las operaciones de **ayer (UTC)**, no las del mismo instante de ejecución.

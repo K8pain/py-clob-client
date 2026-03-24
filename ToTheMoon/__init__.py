@@ -1,1 +1,1 @@
-"""ToTheMoon paper-trading prototype package."""
+"""ToTheMoon helper and strategy package."""

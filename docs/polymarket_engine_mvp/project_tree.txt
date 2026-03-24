@@ -1,0 +1,83 @@
+polymarket_engine_app/
+├── README.md
+├── config/
+│   ├── settings.py
+│   ├── markets.py
+│   └── thresholds.py
+├── data/
+│   ├── raw/
+│   │   ├── gamma/
+│   │   └── clob/
+│   ├── catalog/
+│   │   ├── market_catalog.csv
+│   │   └── token_catalog.csv
+│   ├── historical/
+│   │   └── prices/
+│   │       └── <interval>/<token_id>.csv
+│   ├── execution/
+│   │   ├── order_events.csv
+│   │   ├── fills.csv
+│   │   ├── positions.csv
+│   │   └── settlements.csv
+│   └── reports/
+│       ├── trades_simulated.csv
+│       ├── equity_curve.csv
+│       └── strategy_summary.csv
+├── discovery/
+│   ├── gamma_client.py
+│   ├── models.py
+│   ├── normalizer.py
+│   └── service.py
+├── market_data/
+│   ├── clob_snapshot_client.py
+│   ├── websocket_feeder.py
+│   ├── state_store.py
+│   └── freshness.py
+├── historical/
+│   ├── clob_history_client.py
+│   ├── downloader.py
+│   └── partitioning.py
+├── normalization/
+│   ├── catalog_loader.py
+│   ├── market_mapper.py
+│   ├── price_series.py
+│   └── validators.py
+├── features/
+│   ├── family_builder.py
+│   ├── incoherence_features.py
+│   └── tail_features.py
+├── core/
+│   ├── signal_engine.py
+│   ├── risk_manager.py
+│   ├── portfolio.py
+│   ├── models.py
+│   └── enums.py
+├── execution/
+│   ├── base.py
+│   ├── paper.py
+│   ├── real.py
+│   ├── order_mapper.py
+│   └── fee_model.py
+├── storage/
+│   ├── csv_store.py
+│   ├── catalog_store.py
+│   ├── history_store.py
+│   ├── execution_store.py
+│   └── report_store.py
+├── reporting/
+│   ├── metrics.py
+│   ├── summary.py
+│   └── exporters.py
+├── backtester/
+│   ├── runner.py
+│   ├── replay.py
+│   ├── fills.py
+│   └── result_writer.py
+└── scripts/
+    ├── discover_markets.py
+    ├── download_history.py
+    ├── build_features.py
+    ├── run_paper_bot.py
+    ├── run_backtest.py
+    ├── run_real_bot.py
+    └── generate_report.py

@@ -287,6 +287,41 @@ class PaperTradingStore:
             performance[trade.strategy.value] += trade.pnl
         return dict(performance)
 
+
+    def trades_between(self, start_day: date, end_day: date) -> list[ExecutedTrade]:
+        start = datetime.combine(start_day, time.min, tzinfo=timezone.utc)
+        end = datetime.combine(end_day + timedelta(days=1), time.min, tzinfo=timezone.utc)
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT market_id, strategy, side, action, quantity, price, pnl, rationale, executed_at
+                FROM trades
+                WHERE executed_at >= ? AND executed_at < ?
+                ORDER BY executed_at ASC
+                """,
+                (start.isoformat(), end.isoformat()),
+            ).fetchall()
+        return [
+            ExecutedTrade(
+                market_id=str(row["market_id"]),
+                strategy=StrategyName(row["strategy"]),
+                side=SignalDirection(row["side"]),
+                action=str(row["action"]),
+                quantity=float(row["quantity"]),
+                price=float(row["price"]),
+                pnl=float(row["pnl"]),
+                rationale=str(row["rationale"]),
+                executed_at=datetime.fromisoformat(str(row["executed_at"])),
+            )
+            for row in rows
+        ]
+
+    def strategy_performance_between(self, start_day: date, end_day: date) -> dict[str, float]:
+        performance: dict[str, float] = defaultdict(float)
+        for trade in self.trades_between(start_day, end_day):
+            performance[trade.strategy.value] += trade.pnl
+        return dict(performance)
+
     def portfolio_snapshot(self, latest_snapshots: dict[str, MarketSnapshot], target_day: date) -> PortfolioSnapshot:
         open_positions = self.list_open_positions()
         marked_value = self.available_cash()

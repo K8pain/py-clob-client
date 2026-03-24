@@ -9,8 +9,6 @@ from typing import Any
 
 import httpx
 
-from ToTheMoon.api import PolymarketHttpClient, RateLimitPolicy
-
 from .models import MarketSnapshot, SignalDirection, StrategyName, TradeSignal
 from .storage import PaperTradingStore
 
@@ -28,19 +26,10 @@ class StrategyConfig:
     spread_threshold: float = 1.05
     profit_target: float = 0.07
     summary_channel: str = "#polymarket-autopilot"
-    gamma_markets_limit: int = 250
-    gamma_window_seconds: float = 10.0
 
 
 class PolymarketAutopilot:
-    """Paper-only Polymarket strategy runner.
-
-    Intended users: developers/operators who want a safe strategy simulator.
-    Problem solved: evaluate simple market-making/trend/mean-reversion ideas
-    without risking capital.
-    How it works: fetch market snapshots, derive signals, store simulated
-    portfolio state in SQLite, and write a morning summary log.
-    """
+    """Paper-only Polymarket strategy runner."""
 
     def __init__(
         self,
@@ -56,8 +45,6 @@ class PolymarketAutopilot:
         self.config = config or StrategyConfig(starting_capital=store.starting_capital)
         self.market_api_url = market_api_url
         self.client = client
-        self.http_client = PolymarketHttpClient(timeout=10.0, client=client) if client is not None else PolymarketHttpClient(timeout=10.0)
-        self.http_client.register_limit(RateLimitPolicy("gamma-markets", self.config.gamma_markets_limit, self.config.gamma_window_seconds))
         self.log_directory.mkdir(parents=True, exist_ok=True)
 
     def fetch_market_data(self) -> list[MarketSnapshot]:
@@ -90,22 +77,47 @@ class PolymarketAutopilot:
         self.store.record_market_snapshots(snapshots)
         return {"snapshots": len(snapshots), "executed_trades": executed, "closed_positions": closed}
 
+    def run_simulation(self, cycles: int) -> dict[str, int]:
+        total_snapshots = 0
+        total_executed = 0
+        total_closed = 0
+        safe_cycles = max(1, cycles)
+        for _ in range(safe_cycles):
+            result = self.run_cycle()
+            total_snapshots += result["snapshots"]
+            total_executed += result["executed_trades"]
+            total_closed += result["closed_positions"]
+        return {
+            "cycles": safe_cycles,
+            "snapshots": total_snapshots,
+            "executed_trades": total_executed,
+            "closed_positions": total_closed,
+        }
+
     def publish_daily_summary(self, as_of: date | None = None) -> Path:
+        return self.publish_window_summary(as_of=as_of, lookback_days=1)
+
+    def publish_window_summary(self, as_of: date | None = None, lookback_days: int = 180) -> Path:
         report_day = as_of or date.today()
+        safe_lookback_days = max(1, lookback_days)
+        period_start = report_day - timedelta(days=safe_lookback_days)
         yesterday = report_day - timedelta(days=1)
+
         latest_snapshots = {snapshot.market_id: snapshot for snapshot in self.fetch_market_data()}
-        trades = self.store.trades_for_day(yesterday)
+        yesterday_trades = self.store.trades_for_day(yesterday)
+        period_trades = self.store.trades_between(period_start, yesterday)
         portfolio = self.store.portfolio_snapshot(latest_snapshots, yesterday)
-        performance = self.store.strategy_performance(yesterday)
+        performance = self.store.strategy_performance_between(period_start, yesterday)
         output_path = self.log_directory / "polymarket-autopilot.log"
 
         lines = [
             f"{self.config.summary_channel} | summary for {report_day.isoformat()}",
+            f"Window: {period_start.isoformat()} -> {yesterday.isoformat()} ({safe_lookback_days} days)",
             "",
             "Yesterday's trades (entry/exit prices, P&L):",
         ]
-        if trades:
-            for trade in trades:
+        if yesterday_trades:
+            for trade in yesterday_trades:
                 lines.append(
                     "- "
                     f"{trade.executed_at.isoformat()} | {trade.strategy.value} | {trade.action} {trade.side.value} | "
@@ -114,13 +126,18 @@ class PolymarketAutopilot:
         else:
             lines.append("- No paper trades were recorded yesterday.")
 
+        period_closed = [trade for trade in period_trades if trade.action == "SELL"]
+        period_wins = len([trade for trade in period_closed if trade.pnl > 0])
+        period_win_rate = period_wins / len(period_closed) if period_closed else 0.0
+
         lines.extend(
             [
                 "",
                 f"Current portfolio value: ${portfolio.marked_value:,.2f}",
                 f"Open positions: {portfolio.open_positions}",
-                f"Win rate: {portfolio.win_rate:.2%}",
-                f"Strategy performance: {json.dumps(performance, sort_keys=True)}",
+                f"Win rate (window): {period_win_rate:.2%}",
+                f"Strategy performance (window): {json.dumps(performance, sort_keys=True)}",
+                f"Total trades in window: {len(period_trades)}",
                 "",
                 "Market insights and recommendations:",
                 "- TAIL: Favor strong-conviction YES markets only when volume is accelerating.",
@@ -142,21 +159,23 @@ class PolymarketAutopilot:
             if now >= next_run:
                 next_run += timedelta(days=1)
             time.sleep(max(1, int((next_run - now).total_seconds())))
-            self.publish_daily_summary()
+            self.publish_window_summary(lookback_days=180)
 
     def _request_market_payload(self) -> Any:
         params = {"limit": self.config.max_markets, "active": "true", "closed": "false"}
-        response = self.http_client.get(self.market_api_url, params=params, policy_name="gamma-markets")
-        return response.json()
+        if self.client is not None:
+            response = self.client.get(self.market_api_url, params=params)
+            response.raise_for_status()
+            return response.json()
 
-    def _tail_signals(
-        self,
-        snapshot: MarketSnapshot,
-        previous: MarketSnapshot | None,
-    ) -> list[TradeSignal]:
+        with httpx.Client(timeout=10) as client:
+            response = client.get(self.market_api_url, params=params)
+            response.raise_for_status()
+            return response.json()
+
+    def _tail_signals(self, snapshot: MarketSnapshot, previous: MarketSnapshot | None) -> list[TradeSignal]:
         if snapshot.yes_probability < self.config.tail_probability_threshold or previous is None:
             return []
-
         if previous.volume_24h <= 0:
             return []
 
@@ -177,11 +196,7 @@ class PolymarketAutopilot:
             )
         ]
 
-    def _bonding_signals(
-        self,
-        snapshot: MarketSnapshot,
-        previous: MarketSnapshot | None,
-    ) -> list[TradeSignal]:
+    def _bonding_signals(self, snapshot: MarketSnapshot, previous: MarketSnapshot | None) -> list[TradeSignal]:
         if previous is None or previous.yes_price <= 0:
             return []
 
@@ -195,9 +210,7 @@ class PolymarketAutopilot:
                 market_id=snapshot.market_id,
                 direction=SignalDirection.YES,
                 confidence=0.08,
-                rationale=(
-                    f"Contrarian setup after a {drop:.2%} move with news_score={snapshot.news_score:.2f}"
-                ),
+                rationale=f"Contrarian setup after a {drop:.2%} move with news_score={snapshot.news_score:.2f}",
             )
         ]
 

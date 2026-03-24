@@ -2,7 +2,7 @@
 
 ## Qué es
 
-`strategies.polymarket_autopilot` es un simulador de estrategias para Polymarket que opera **solo en paper trading**.
+`ToTheMoon.strategies.strategies.polymarket_autopilot` es un simulador de estrategias para Polymarket que opera **solo en paper trading**.
 No envía órdenes reales ni usa dinero real.
 
 ## Para quién es
@@ -46,20 +46,20 @@ SQLite local con estas tablas:
 
 Rutas por defecto:
 
-- DB: `strategies/polymarket_autopilot/data/paper_trading.db`
-- Log: `strategies/polymarket_autopilot/logs/polymarket-autopilot.log`
+- DB: `ToTheMoon/strategies/strategies/polymarket_autopilot/data/paper_trading.db`
+- Log: `ToTheMoon/strategies/strategies/polymarket_autopilot/logs/polymarket-autopilot.log`
 
 ## Ejecución rápida (ahora con salida visible)
 
 ```bash
-python -m strategies.polymarket_autopilot.runner
+python -m ToTheMoon.strategies.strategies.polymarket_autopilot.runner
 ```
 
 Salida esperada (ejemplo):
 
 ```text
 [polymarket-autopilot] ciclo completado | snapshots=200 | executed_trades=4 | closed_positions=1
-[polymarket-autopilot] resumen guardado en: strategies/polymarket_autopilot/logs/polymarket-autopilot.log
+[polymarket-autopilot] resumen guardado en: ToTheMoon/strategies/strategies/polymarket_autopilot/logs/polymarket-autopilot.log
 ```
 
 ## Modos de ejecución
@@ -67,19 +67,19 @@ Salida esperada (ejemplo):
 ### 1) Un ciclo único (default)
 
 ```bash
-python -m strategies.polymarket_autopilot.runner --mode once
+python -m ToTheMoon.strategies.strategies.polymarket_autopilot.runner --mode once
 ```
 
 ### 2) Scheduler diario (08:00)
 
 ```bash
-python -m strategies.polymarket_autopilot.runner --mode scheduler
+python -m ToTheMoon.strategies.strategies.polymarket_autopilot.runner --mode scheduler
 ```
 
 ### 3) Cambiar carpeta base (data/logs)
 
 ```bash
-python -m strategies.polymarket_autopilot.runner --base-path /tmp/polymarket-autopilot
+python -m ToTheMoon.strategies.strategies.polymarket_autopilot.runner --base-path /tmp/polymarket-autopilot
 ```
 
 ## Troubleshooting

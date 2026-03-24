@@ -4,8 +4,6 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from ToTheMoon.api import EndpointRateLimiter, RateLimitPolicy
-
 from .models import FillRecord, OrderEvent, OrderRequest
 from .storage import CsvStore
 
@@ -46,12 +44,10 @@ class PaperExecutionAdapter:
 
 
 class RealExecutionAdapter:
-    def __init__(self, client, rate_limiter: EndpointRateLimiter | None = None):
+    def __init__(self, client):
         self.client = client
-        self.rate_limiter = rate_limiter or EndpointRateLimiter(RateLimitPolicy("clob-post-order", 2500, 10.0))
 
     def execute(self, order: OrderRequest) -> dict:
-        self.rate_limiter.acquire()
         return {
             "token_id": order.token_id,
             "side": order.side.value,

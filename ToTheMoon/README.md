@@ -13,13 +13,14 @@
   6. Persiste estado y trades en JSON.
 
 ## 2) UX / flujo de uso
-- **Happy flow**: ejecutar `run_once()` cada 15 min (cron), revisar `ToTheMoon/paper_trades.json` y `ToTheMoon/state.json`.
+- **Happy flow**: ejecutar `run_once()` cada 15 min (cron), revisar `paper_trades.json` y `state.json`.
 - **Alternative flow**: si no hay mercados elegibles o no hay señal, no se genera trade.
 - **MVP**: sin UI visual todavía; salida en archivos JSON para inspección rápida.
 
 ## 3) Necesidades técnicas
 - Reutiliza `py_clob_client.ClobClient` para descubrimiento y precio midpoint.
 - No introduce DB ni servicios externos adicionales.
+- Estrategias reubicadas en su carpeta propia: `ToTheMoon/strategies/automated_paper_v1_web/`.
 - Diseño simple orientado a funciones/métodos pequeños:
   - descubrimiento de mercado
   - normalización de token YES
@@ -37,7 +38,7 @@
 
 ## 5) Plan y DoD
 - **MVP completado**:
-  - Estructura `ToTheMoon/strategies`
+  - Estructura `ToTheMoon/strategies/automated_paper_v1_web`
   - Estrategia base mean reversion en paper trading
   - Persistencia local JSON
 - **Siguiente milestone**:
@@ -46,6 +47,7 @@
 
 ## 6) Ripple effects
 - Documentación nueva en este folder.
+- Tests e imports actualizados al nuevo destino de estrategias.
 - No afecta módulos de trading real existentes.
 
 ## 7) Contexto más amplio
@@ -55,7 +57,5 @@
   - métricas por activo
   - integración de dashboard web
 
-
-## Operación y rate limits
-
-Para el inventario completo de programas de `ToTheMoon`, la guía de ejecución sin API key y la estrategia de cumplimiento de rate limits públicos/privados, ver `ToTheMoon/RATE_LIMITING_AND_OPERATIONS.md`.
+## Guía paso a paso
+Sigue `ToTheMoon/STRATEGIES_STEP_BY_STEP.md` para setup, ejecución y mantenimiento.

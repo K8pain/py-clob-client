@@ -1,4 +1,4 @@
-from ToTheMoon.strategies.mean_reversion import MeanReversionPaperStrategy, StrategyConfig
+from ToTheMoon.strategies.automated_paper_v1_web.mean_reversion import MeanReversionPaperStrategy, StrategyConfig
 
 
 class StubClient:

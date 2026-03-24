@@ -1,0 +1,53 @@
+{
+  "active_profile": "baseline",
+  "profiles": {
+    "baseline": {
+      "launcher": {
+        "log_file": "logs/launcher.log",
+        "enabled_scripts": [
+          "mean-reversion",
+          "autopilot-once",
+          "autopilot-scheduler",
+          "mvp1-demo"
+        ],
+        "mean_reversion": {
+          "page_limit": 3
+        },
+        "autopilot": {
+          "simulation_days": 1
+        }
+      },
+      "launcher_helpers": {
+        "log_file": "logs/launcher_helpers.log",
+        "enabled_helpers": [
+          "execution-guard",
+          "pnl-engine",
+          "market-regime",
+          "risk-controls",
+          "resilience",
+          "strategy-validation"
+        ],
+        "resilience": {
+          "max_attempts": 3,
+          "base_delay_seconds": 0.01
+        }
+      }
+    },
+    "strict": {
+      "launcher": {
+        "mean_reversion": {
+          "page_limit": 1
+        },
+        "autopilot": {
+          "simulation_days": 2
+        }
+      },
+      "launcher_helpers": {
+        "resilience": {
+          "max_attempts": 2,
+          "base_delay_seconds": 0.001
+        }
+      }
+    }
+  }
+}

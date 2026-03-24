@@ -8,6 +8,8 @@ Python client for the Polymarket Central Limit Order Book (CLOB).
 
 ## Documentation
 
+- Arquitectura MVP del bot Polymarket (discovery, histórico, paper, backtester y real): `docs/polymarket_engine_mvp/README.md`.
+
 ## Installation
 
 ```bash

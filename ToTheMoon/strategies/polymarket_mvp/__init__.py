@@ -1,7 +1,6 @@
-"""Trading strategies and strategy packages for ToTheMoon."""
+"""Polymarket MVP strategy primitives package."""
 
-from .mean_reversion import MeanReversionPaperStrategy, StrategyConfig
-from .polymarket_mvp import (
+from .core import (
     MarketDefinition,
     MarketState,
     PaperTrade,
@@ -19,8 +18,6 @@ from .polymarket_mvp import (
 )
 
 __all__ = [
-    "MeanReversionPaperStrategy",
-    "StrategyConfig",
     "MarketDefinition",
     "MarketState",
     "PaperTrade",

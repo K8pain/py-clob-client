@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from py_clob_client.client import ClobClient
+
+from ToTheMoon.api import EndpointRateLimiter, RateLimitPolicy
 
 
 class PositionSide(str, Enum):
@@ -23,8 +25,12 @@ class StrategyConfig:
     sell_above: float = 0.60
     stake_usd: float = 10.0
     max_consecutive_losses: int = 3
-    state_file: str = "ToTheMoon/state.json"
-    trades_file: str = "ToTheMoon/paper_trades.json"
+    simplified_markets_limit: int = 250
+    simplified_markets_window_seconds: float = 10.0
+    clob_midpoint_limit: int = 1200
+    clob_midpoint_window_seconds: float = 10.0
+    state_file: Path = field(default_factory=lambda: Path(__file__).resolve().parent.parent / "state.json")
+    trades_file: Path = field(default_factory=lambda: Path(__file__).resolve().parent.parent / "paper_trades.json")
 
 
 @dataclass
@@ -59,6 +65,12 @@ class MeanReversionPaperStrategy:
     def __init__(self, config: StrategyConfig):
         self.config = config
         self.client = ClobClient(config.host)
+        self.simplified_markets_limiter = EndpointRateLimiter(
+            RateLimitPolicy("clob-simplified-markets", config.simplified_markets_limit, config.simplified_markets_window_seconds)
+        )
+        self.midpoint_limiter = EndpointRateLimiter(
+            RateLimitPolicy("clob-midpoint", config.clob_midpoint_limit, config.clob_midpoint_window_seconds)
+        )
         self.state_path = Path(config.state_file)
         self.trades_path = Path(config.trades_file)
         self.state = self._load_state()
@@ -69,6 +81,7 @@ class MeanReversionPaperStrategy:
         cursor = "MA=="
 
         for _ in range(page_limit):
+            self.simplified_markets_limiter.acquire()
             response = self.client.get_simplified_markets(next_cursor=cursor)
             data = response.get("data", [])
             if not data:
@@ -92,6 +105,7 @@ class MeanReversionPaperStrategy:
             return None
 
         token_id = market["yes_token_id"]
+        self.midpoint_limiter.acquire()
         price = float(self.client.get_midpoint(token_id))
         now = self._utc_now()
 

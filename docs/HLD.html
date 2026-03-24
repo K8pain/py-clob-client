@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HLD · py-clob-client</title>
+  <meta name="description" content="HLD · py-clob-client — documentación visual human-readable para py-clob-client." />
+  <style>
+:root {
+  --bg: #081120;
+  --bg-soft: rgba(15, 23, 42, 0.72);
+  --panel: rgba(12, 19, 35, 0.78);
+  --panel-strong: rgba(10, 16, 30, 0.92);
+  --line: rgba(148, 163, 184, 0.18);
+  --text: #e5eefc;
+  --muted: #9fb1cc;
+  --brand: #6ee7f9;
+  --brand-2: #a78bfa;
+  --accent: #34d399;
+  --warning: #fbbf24;
+  --danger: #fb7185;
+  --shadow: 0 30px 80px rgba(2, 6, 23, 0.45);
+  --radius: 24px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, rgba(52, 211, 153, 0.15), transparent 28%),
+    radial-gradient(circle at top right, rgba(167, 139, 250, 0.18), transparent 30%),
+    linear-gradient(180deg, #07101e 0%, #0b1327 40%, #050914 100%);
+  min-height: 100vh;
+}
+a { color: inherit; }
+.shell {
+  width: min(1200px, calc(100vw - 40px));
+  margin: 0 auto;
+  padding: 32px 0 64px;
+}
+.topbar {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  background: rgba(8, 15, 30, 0.65);
+  backdrop-filter: blur(18px);
+  border-radius: 999px;
+  position: sticky;
+  top: 16px;
+  z-index: 10;
+  box-shadow: var(--shadow);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-decoration: none;
+}
+.logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  color: #04111f;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+.brand small, .meta small { display:block; color: var(--muted); }
+.brand strong { font-size: 0.98rem; }
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.nav a {
+  text-decoration: none;
+  padding: 10px 14px;
+  color: var(--muted);
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.nav a:hover {
+  color: var(--text);
+  background: rgba(148, 163, 184, 0.08);
+  border-color: var(--line);
+}
+.hero {
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: 1.2fr .8fr;
+  gap: 24px;
+}
+.panel {
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(7, 12, 24, 0.88));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.hero-card {
+  padding: 34px;
+  position: relative;
+  overflow: hidden;
+}
+.hero-card::after {
+  content: "";
+  position: absolute;
+  inset: auto -60px -80px auto;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, rgba(110, 231, 249, 0.22), transparent 60%);
+  pointer-events: none;
+}
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(110, 231, 249, 0.2);
+  background: rgba(110, 231, 249, 0.08);
+  color: var(--brand);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+}
+h1 {
+  margin: 18px 0 14px;
+  font-size: clamp(2.2rem, 4vw, 4.4rem);
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+}
+.hero p {
+  color: var(--muted);
+  font-size: 1.04rem;
+  line-height: 1.7;
+}
+.hero-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 24px;
+}
+.kpi {
+  padding: 18px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line);
+}
+.kpi strong { display:block; font-size: 1.45rem; margin-bottom: 8px; }
+.kpi span { color: var(--muted); font-size: 0.95rem; line-height: 1.5; }
+.side-stack {
+  display: grid;
+  gap: 18px;
+}
+.note, .journey, .section, .card, .timeline, .risk-grid, .mockup, .footer-card {
+  padding: 24px;
+}
+.note h3, .journey h3, .section h2, .card h3, .timeline h3, .risk-grid h3, .mockup h3 { margin-top: 0; }
+.badge-row { display:flex; gap:10px; flex-wrap: wrap; margin-top: 18px; }
+.badge {
+  display:inline-flex; align-items:center; gap:8px; padding:9px 12px; border-radius:999px;
+  background: rgba(255,255,255,0.04); border:1px solid var(--line); color: var(--muted);
+}
+.grid-2, .grid-3 {
+  display: grid;
+  gap: 22px;
+  margin-top: 24px;
+}
+.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+main { margin-top: 30px; display: grid; gap: 24px; }
+.section { scroll-margin-top: 110px; }
+.section-title {
+  display:flex; justify-content: space-between; gap: 20px; align-items:flex-start; margin-bottom: 20px;
+}
+.section h2 {
+  margin: 0;
+  font-size: clamp(1.5rem, 2vw, 2.4rem);
+  letter-spacing: -0.03em;
+}
+.section-lead { color: var(--muted); max-width: 62ch; line-height: 1.7; }
+ul, ol { padding-left: 1.2rem; }
+li { margin: 8px 0; color: var(--muted); line-height: 1.65; }
+strong { color: var(--text); }
+.callout {
+  margin-top: 18px; padding: 16px 18px; border-radius: 18px; border:1px solid rgba(52, 211, 153, 0.18);
+  background: rgba(52, 211, 153, 0.08); color: #cffcf0;
+}
+.split {
+  display:grid; grid-template-columns: 1.15fr 0.85fr; gap:22px;
+}
+.codeframe {
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.95), rgba(15, 23, 42, 0.95));
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  overflow: hidden;
+}
+.codebar {
+  display:flex; align-items:center; gap:8px; padding:14px 18px; border-bottom:1px solid var(--line); color: var(--muted);
+}
+.dot { width:10px; height:10px; border-radius:50%; background:#f87171; box-shadow: 18px 0 0 #fbbf24, 36px 0 0 #34d399; margin-right: 34px; }
+pre {
+  margin: 0;
+  padding: 22px;
+  overflow: auto;
+  color: #d6e5ff;
+  font-size: 0.96rem;
+  line-height: 1.6;
+}
+.stat-list { display:grid; gap:14px; }
+.stat-item {
+  padding: 16px 18px; border-radius:18px; background: rgba(255,255,255,0.03); border:1px solid var(--line);
+}
+.stat-item span { display:block; color: var(--muted); margin-top: 6px; line-height: 1.6; }
+.timeline-grid { display:grid; gap:14px; }
+.step {
+  display:grid; grid-template-columns: 42px 1fr; gap: 16px; align-items: start;
+  padding: 16px; border-radius:20px; background: rgba(255,255,255,0.03); border:1px solid var(--line);
+}
+.step .num {
+  width: 42px; height: 42px; border-radius: 14px; display:grid; place-items:center;
+  background: linear-gradient(135deg, rgba(110, 231, 249, 0.18), rgba(167, 139, 250, 0.18));
+  color: var(--brand); font-weight: 800;
+}
+.matrix { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:14px; }
+.matrix .cell {
+  padding:16px 18px; border-radius:18px; border:1px solid var(--line); background: rgba(255,255,255,0.03);
+}
+.tableish { display:grid; gap:12px; }
+.row {
+  display:grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 16px 18px; border-radius:18px;
+  border:1px solid var(--line); background: rgba(255,255,255,0.03);
+}
+.row strong { display:block; margin-bottom: 6px; }
+.moonshots {
+  display:grid; gap:16px;
+}
+.moon {
+  padding:18px; border-radius:22px; border:1px solid rgba(167, 139, 250, 0.22); background: rgba(167, 139, 250, 0.08);
+}
+footer { margin-top: 26px; }
+.footer-card { color: var(--muted); }
+.footer-card strong { display:block; color:var(--text); margin-bottom:8px; }
+.index-grid { margin-top: 26px; display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:24px; }
+.doc-link {
+  display:block; text-decoration:none; padding: 28px; border-radius: 26px; border:1px solid var(--line);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(7, 12, 24, 0.88)); box-shadow: var(--shadow);
+}
+.doc-link:hover { transform: translateY(-2px); transition: 180ms ease; }
+.doc-link h3 { margin-top: 8px; margin-bottom: 12px; font-size: 1.5rem; }
+.doc-link p { color: var(--muted); line-height: 1.7; }
+@media (max-width: 960px) {
+  .hero, .split, .grid-2, .grid-3, .index-grid, .matrix, .row { grid-template-columns: 1fr; }
+  .topbar { border-radius: 26px; }
+  .nav { display:none; }
+  .shell { width: min(100vw - 24px, 1200px); }
+}
+</style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="index.html">
+        <div class="logo">PC</div>
+        <div>
+          <strong>py-clob-client docs</strong>
+          <small>HTML human-readable · static docs</small>
+        </div>
+      </a>
+      <nav class="nav"><a href="#build">Qué es</a><a href="#ux">UX/DX</a><a href="#technical">Técnico</a><a href="#testing">Testing</a><a href="#plan">Plan</a><a href="#ripple">Ripple</a><a href="#context">Contexto</a></nav>
+    </header>
+
+    <section class="hero">
+      <article class="panel hero-card">
+        <span class="eyebrow">High Level Design</span>
+        <h1>Una vista de sistema que explica el SDK sin sonar a checklist plano.</h1>
+        <p>Este documento traduce el repo a una narrativa legible: qué producto es, para quién sirve, cómo se usa, qué riesgos tiene, cómo debería evolucionar y qué decisiones vale la pena mantener simples.</p>
+        <div class="badge-row">
+          <span class="badge">⚡ lectura rápida</span>
+          <span class="badge">🧠 contexto para humanos</span>
+          <span class="badge">🪄 diseño editorial moderno</span>
+        </div>
+      </article>
+      <aside class="side-stack">
+  <div class="panel note">
+    <h3>Executive snapshot</h3>
+    <div class="hero-grid">
+      <div class="kpi"><strong>L0 / L1 / L2</strong><span>El SDK escala desde lectura pública hasta trading autenticado.</span></div>
+      <div class="kpi"><strong>RFQ ready</strong><span>El flujo de cotización vive como una extensión clara del cliente base.</span></div>
+      <div class="kpi"><strong>MVP-first</strong><span>Interfaz pública, tests y ejemplos antes de refinar de más.</span></div>
+      <div class="kpi"><strong>No DB</strong><span>Cliente puro: menos infraestructura, más foco en contratos y precisión.</span></div>
+    </div>
+  </div>
+  <div class="panel journey">
+    <h3>Reader journey</h3>
+    <p style="color:var(--muted); line-height:1.7; margin:0;">Primero entiendes el problema, luego los flows, después los constraints técnicos, y recién ahí el plan de trabajo. Esa secuencia hace la doc más humana.</p>
+  </div>
+</aside>
+    </section>
+
+    <main>
+<section class="panel section" id="build">
+  <div class="section-title">
+    <div>
+      <h2>1. Qué estamos construyendo</h2>
+      <p class="section-lead">Un SDK Python para operar el CLOB de Polymarket de forma segura, tipada y razonablemente ergonómica. El objetivo es esconder complejidad operativa sin esconder conceptos importantes.</p>
+    </div>
+    <span class="eyebrow">Zoom out</span>
+  </div>
+  <div class="grid-3">
+    <div class="card panel"><h3>Qué es</h3><p style="color:var(--muted); line-height:1.7;">Una fachada de alto nivel para consultar mercado, autenticarse por niveles, firmar órdenes y ejecutar workflows RFQ.</p></div>
+    <div class="card panel"><h3>Para quién</h3><p style="color:var(--muted); line-height:1.7;">Developers de bots, integradores backend y equipos que automatizan trading o market data sobre Polymarket.</p></div>
+    <div class="card panel"><h3>Qué problema resuelve</h3><p style="color:var(--muted); line-height:1.7;">Reduce fricción en auth, firmas, rounding, payloads y conexión entre wallet, credenciales API y endpoints.</p></div>
+  </div>
+  <div class="callout"><strong>Principio rector:</strong> distill the model. Quitar duplicación y hacer explícitos solo los conceptos que realmente cambian el comportamiento.</div>
+</section>
+
+<section class="panel section" id="ux">
+  <div class="section-title">
+    <div>
+      <h2>2. User experience / Developer experience</h2>
+      <p class="section-lead">No hay UI tradicional; la experiencia del usuario es la ergonomía de la API Python, la legibilidad de los ejemplos y la previsibilidad de los errores.</p>
+    </div>
+    <span class="eyebrow">Zoom in</span>
+  </div>
+  <div class="split">
+    <div class="panel mockup">
+      <h3>Happy flows</h3>
+      <ul>
+        <li><strong>Lectura:</strong> crear `ClobClient` en L0 y consultar salud, tiempo, orderbooks y mercados.</li>
+        <li><strong>Trading:</strong> crear o derivar credenciales, construir orden, firmar y publicar.</li>
+        <li><strong>RFQ:</strong> entrar por `client.rfq`, crear request, cotizar y cerrar el loop de aprobación.</li>
+      </ul>
+      <h3>Alternative flows</h3>
+      <ul>
+        <li>Wallet proxy con `signature_type` y `funder`.</li>
+        <li>FOK sin liquidez suficiente.</li>
+        <li>Resolución dinámica y caché de tick size antes de firmar.</li>
+        <li>Errores por credenciales ausentes o inválidas en L2.</li>
+      </ul>
+    </div>
+    <div class="codeframe">
+      <div class="codebar"><span class="dot"></span>Wireframe del flujo principal</div>
+<pre>[Developer script]
+    ↓
+ClobClient(host, chain_id?, key?, creds?)
+    ↓
+create_or_derive_api_creds()   ← opcional
+    ↓
+create_order() / create_market_order()
+    ↓
+post_order()
+    ↓
+get_orders() / cancel() / cancel_all()</pre>
+    </div>
+  </div>
+</section>
+
+<section class="panel section" id="technical">
+  <div class="section-title">
+    <div>
+      <h2>3. Necesidades técnicas</h2>
+      <p class="section-lead">El diseño técnico tiene que preservar exactitud criptográfica y simplicidad de uso. En este repo, los errores pequeños en auth o rounding tienen impacto alto.</p>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="panel card">
+      <h3>Conceptos principales</h3>
+      <div class="stat-list">
+        <div class="stat-item"><strong>ClobClient</strong><span>Fachada principal, compone signer, builder, credenciales y RFQ client.</span></div>
+        <div class="stat-item"><strong>Signer</strong><span>Encapsula private key y chain para firma.</span></div>
+        <div class="stat-item"><strong>OrderBuilder</strong><span>Traduce intent de orden a `SignedOrder` usando rounding por tick size.</span></div>
+        <div class="stat-item"><strong>RfqClient</strong><span>Extiende el cliente con workflows request/quote/approve.</span></div>
+      </div>
+    </div>
+    <div class="panel card">
+      <h3>Reglas técnicas críticas</h3>
+      <ul>
+        <li><strong>Auth por niveles:</strong> L0 público, L1 con firma wallet, L2 con API creds + request signing.</li>
+        <li><strong>Rounding:</strong> depende de `ROUNDING_CONFIG` y del `tick_size` resuelto para el token.</li>
+        <li><strong>Serialización:</strong> JSON compacto y estable para evitar firmas inconsistentes.</li>
+        <li><strong>Sin DB local:</strong> es un SDK puro; no requiere migraciones internas.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="tableish" style="margin-top:22px;">
+    <div class="row"><div><strong>Dependencias externas</strong><span style="color:var(--muted);">`py_order_utils` y `py_builder_signing_sdk` concentran parte de la lógica de firma y builder config.</span></div><div><strong>Patrones de mantenibilidad</strong><span style="color:var(--muted);">Preferir funciones pequeñas, dataclasses, separación entre crear y usar dependencias, y edge cases documentados.</span></div></div>
+  </div>
+</section>
+
+<section class="panel section" id="testing">
+  <div class="section-title">
+    <div>
+      <h2>4. Testing & security</h2>
+      <p class="section-lead">La testabilidad no es un nice-to-have: es el mecanismo que impide romper firma, auth y precisión numérica al iterar rápido.</p>
+    </div>
+  </div>
+  <div class="grid-3">
+    <div class="card panel"><h3>Cobertura objetivo</h3><ul><li>Headers y signing helpers.</li><li>Order builder y conversiones.</li><li>RFQ params y payload formatting.</li></ul></div>
+    <div class="card panel"><h3>Checks de seguridad</h3><ul><li>No loggear secrets.</li><li>Validar `side`, `chain_id`, `tick_size`.</li><li>Mantener serialización determinística.</li></ul></div>
+    <div class="card panel"><h3>Side effects</h3><ul><li>Cambios en headers rompen endpoints privados.</li><li>Cambios en rounding alteran fills y precios efectivos.</li><li>Cambios en config afectan addresses on-chain.</li></ul></div>
+  </div>
+  <div class="callout">Cuando se toque auth o firma, asumir impacto de seguridad alto y recomendar una revisión explícita.</div>
+</section>
+
+<section class="panel section" id="plan">
+  <div class="section-title">
+    <div>
+      <h2>5. Plan de trabajo</h2>
+      <p class="section-lead">La estrategia recomendada es MVP-first: primero interfaz y contrato, luego implementación mínima, luego tests, ejemplos y refinamiento.</p>
+    </div>
+  </div>
+  <div class="timeline-grid">
+    <div class="step"><div class="num">1</div><div><strong>Definir inputs/outputs</strong><div style="color:var(--muted); margin-top:6px;">0.5 día. Dataclasses o tipos reutilizando contratos existentes.</div></div></div>
+    <div class="step"><div class="num">2</div><div><strong>Implementar en el módulo correcto</strong><div style="color:var(--muted); margin-top:6px;">0.5 día. Preferir `ClobClient` o `RfqClient` antes de expandir superficie innecesaria.</div></div></div>
+    <div class="step"><div class="num">3</div><div><strong>Añadir tests</strong><div style="color:var(--muted); margin-top:6px;">0.5–1 día. Cobertura de paths felices y edge cases.</div></div></div>
+    <div class="step"><div class="num">4</div><div><strong>Documentar y ejemplificar</strong><div style="color:var(--muted); margin-top:6px;">0.5 día. README/examples/docs alineados.</div></div></div>
+  </div>
+  <div class="matrix" style="margin-top:22px;">
+    <div class="cell"><strong>Definition of Done</strong><div style="color:var(--muted); margin-top:6px;">Método funcional + tests relevantes + ejemplo + docs.</div></div>
+    <div class="cell"><strong>Riesgo principal</strong><div style="color:var(--muted); margin-top:6px;">Cambios upstream en la API CLOB o en contratos implícitos de payload.</div></div>
+  </div>
+</section>
+
+<section class="panel section" id="ripple">
+  <div class="section-title">
+    <div>
+      <h2>6. Ripple effects</h2>
+      <p class="section-lead">En SDKs, el cambio de una función pública rara vez termina en una sola función. Hay ejemplos, README, integradores externos y expectativas de compatibilidad.</p>
+    </div>
+  </div>
+  <ul>
+    <li>Actualizar README cuando cambie la API pública.</li>
+    <li>Sincronizar ejemplos ejecutables con los nuevos contratos.</li>
+    <li>Comunicar breaking changes en firma, tipos o auth.</li>
+    <li>Verificar compatibilidad con bots o backends consumidores.</li>
+  </ul>
+</section>
+
+<section class="panel section" id="context">
+  <div class="section-title">
+    <div>
+      <h2>7. Broader context</h2>
+      <p class="section-lead">El repo es útil porque está enfocado. Esa especialización también marca sus límites y su espacio de evolución.</p>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="panel card">
+      <h3>Limitaciones actuales</h3>
+      <ul>
+        <li>Acoplamiento fuerte a Polymarket CLOB.</li>
+        <li>Tipado parcial de respuestas remotas.</li>
+        <li>Errores de red dependen de helpers HTTP sin capa avanzada de resiliencia.</li>
+      </ul>
+    </div>
+    <div class="panel card moonshots">
+      <div class="moon"><strong>Moonshot 1</strong><div style="color:var(--muted); margin-top:6px;">Strategy sandbox con snapshots para backtesting rápido.</div></div>
+      <div class="moon"><strong>Moonshot 2</strong><div style="color:var(--muted); margin-top:6px;">SDK generado parcialmente desde una spec API formal.</div></div>
+      <div class="moon"><strong>Moonshot 3</strong><div style="color:var(--muted); margin-top:6px;">Observabilidad integrada con tracing/metrics opcionales.</div></div>
+    </div>
+  </div>
+</section>
+</main>
+
+    <footer>
+      <div class="panel footer-card">
+        <strong>Closing note</strong>
+        El HLD está pensado para alinear producto, implementación y priorización sin perder claridad visual.
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

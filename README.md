@@ -10,6 +10,11 @@ Python client for the Polymarket Central Limit Order Book (CLOB).
 
 - Arquitectura MVP del bot Polymarket (discovery, histórico, paper, backtester y real): `docs/polymarket_engine_mvp/README.md`.
 
+## Talic
+
+- Talic implementation overview: `Talic/README.md`
+- Talic operations runbook: `docs/talic_runbook.md`
+
 ## Installation
 
 ```bash

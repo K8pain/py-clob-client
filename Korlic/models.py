@@ -95,6 +95,9 @@ class PaperOrder:
     reserved_cash: float
     filled_size: float = 0.0
     status: OrderStatus = OrderStatus.OPEN
+    opened_at_utc: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    closed_at_utc: str | None = None
+    close_reason: str | None = None
 
     @property
     def remaining(self) -> float:
@@ -111,6 +114,8 @@ class PaperPosition:
     pnl_gross: float | None = None
     pnl_net: float | None = None
     return_pct: float | None = None
+    opened_at_utc: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    settled_at_utc: str | None = None
 
 
 @dataclass
@@ -137,10 +142,38 @@ class Ledger:
 @dataclass(frozen=True)
 class StructuredEvent:
     run_id: str
+    strategy_version: str
     event_type: str
     decision: str
     reason_code: str
     latency_ms: int
     market_id: str | None = None
     token_id: str | None = None
+    payload: dict[str, str | int | float | bool | None] = field(default_factory=dict)
+    retry_of_event_id: int | None = None
     ts_utc: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+@dataclass(frozen=True)
+class FillReport:
+    fill_size: float
+    average_fill_price: float
+    remaining_size: float
+    remaining_reserved_cash: float
+    state: str
+
+
+@dataclass(frozen=True)
+class SettlementReport:
+    market_id: str
+    token_id: str
+    outcome: str
+    gross_stake: float
+    gross_payoff: float
+    net_pnl: float
+    roi_percent: float
+    holding_duration_seconds: int
+    result_class: str
+    filled_size: float
+    average_fill_price: float
+    partial_fill: bool

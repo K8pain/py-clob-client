@@ -4,8 +4,8 @@ import asyncio
 import random
 import time
 import uuid
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Protocol
 
 from .discovery import DiscoveryEngine, DiscoveryState, MarketClassifier
@@ -44,6 +44,8 @@ class KorlicConfig:
     retry_max: int = 4
     retry_base_ms: int = 100
     retry_jitter_ms: int = 250
+    strategy_version: str = "korlic-v1"
+    order_expiry_seconds: int = 5
 
 
 @dataclass
@@ -84,6 +86,7 @@ class KorlicBot:
             if not market.market.accepting_orders or not market.market.active or market.market.closed:
                 continue
             for token_id in market.market.token_ids:
+                end_epoch_ms = int(market.market.end_time.timestamp() * 1000)
                 book = await self._retry(lambda tid=token_id: self.clob.get_orderbook(tid), "degraded_clob_rest")
                 if book is None:
                     continue
@@ -91,33 +94,140 @@ class KorlicBot:
                     market=market,
                     token_id=token_id,
                     book=book,
-                    end_epoch_ms=int(market.market.end_time.timestamp() * 1000),
+                    end_epoch_ms=end_epoch_ms,
                     time_sync=self.time_sync,
                     available_cash=self.ledger.cash_available,
                 )
-                self.storage.save_event(
-                    StructuredEvent(
-                        run_id=self.run_id,
-                        market_id=market.market.market_id,
-                        token_id=token_id,
-                        event_type="signal",
-                        decision="accepted" if signal else "rejected",
-                        reason_code=reason,
-                        latency_ms=int((time.perf_counter() - started) * 1000),
-                    )
+                seconds_to_end = self.time_sync.seconds_to(end_epoch_ms)
+                self._log_decision(
+                    market=market,
+                    token_id=token_id,
+                    event_type="SIGNAL_DETECTED" if signal else "NO_TRADE",
+                    decision="signaled" if signal else "ignored",
+                    reason=reason,
+                    started=started,
+                    payload={
+                        "seconds_to_end": seconds_to_end,
+                        "best_bid": max((b.price for b in book.bids), default=None),
+                        "best_ask": book.best_ask(),
+                        "visible_depth_at_target": book.depth_at_or_better(self.signal_engine.config.entry_price),
+                        "signal_price": self.signal_engine.config.entry_price,
+                        "market_slug": market.market.slug,
+                        "market_title": market.market.question,
+                        "outcome": "YES",
+                        "side": "BUY",
+                    },
                 )
                 if signal is None:
                     continue
                 order = self.paper.create_order(signal)
                 if order is None:
                     continue
-                self.paper.try_fill(order, book)
+                self._log_decision(
+                    market=market,
+                    token_id=token_id,
+                    event_type="PSEUDO_ORDER_OPENED",
+                    decision="pseudo-traded",
+                    reason="accepted_by_paper_engine",
+                    started=started,
+                    payload={
+                        "pseudo_order_id": order.paper_order_id,
+                        "limit_price": order.limit_price,
+                        "requested_size": order.requested_size,
+                        "reserved_cash": order.reserved_cash,
+                        "order_open_timestamp_utc": order.opened_at_utc,
+                        "rationale": "signal_candidate",
+                        "side": "BUY",
+                        "outcome": "YES",
+                    },
+                )
+                before = self.paper.positions.get(market.market.market_id)
+                filled = self.paper.try_fill(order, book)
+                report = self.paper.last_fill_report
+                if filled > 0 and report is not None:
+                    self._log_decision(
+                        market=market,
+                        token_id=token_id,
+                        event_type=report.state,
+                        decision="filled" if report.state == "PSEUDO_ORDER_FILLED" else "partial_fill",
+                        reason="visible_depth_match",
+                        started=started,
+                        payload={
+                            "pseudo_order_id": order.paper_order_id,
+                            "fill_size": report.fill_size,
+                            "average_fill_price": report.average_fill_price,
+                            "remaining_size": report.remaining_size,
+                            "remaining_reserved_cash": report.remaining_reserved_cash,
+                            "requested_size": order.requested_size,
+                            "filled_size": order.filled_size,
+                            "reserved_cash": order.reserved_cash,
+                        },
+                    )
+                    after = self.paper.positions.get(market.market.market_id)
+                    if after is not None:
+                        self._log_decision(
+                            market=market,
+                            token_id=token_id,
+                            event_type="PAPER_POSITION_OPENED" if before is None else "PAPER_POSITION_UPDATED",
+                            decision="position_opened" if before is None else "position_updated",
+                            reason="fill_applied",
+                            started=started,
+                            payload={
+                                "net_shares": after.size,
+                                "average_entry_price": after.avg_price,
+                                "gross_notional": after.size * after.avg_price,
+                                "previous_size": before.size if before else 0.0,
+                                "new_size": after.size,
+                                "previous_average_entry": before.avg_price if before else 0.0,
+                                "new_average_entry": after.avg_price,
+                            },
+                        )
+                if order.status.value == "OPEN" and seconds_to_end <= self.config.order_expiry_seconds:
+                    self.paper.expire_order(order.paper_order_id, cancelled=False)
+                    self._log_decision(
+                        market=market,
+                        token_id=token_id,
+                        event_type="PSEUDO_ORDER_EXPIRED",
+                        decision="expired",
+                        reason="local_expiration_rule",
+                        started=started,
+                        payload={
+                            "pseudo_order_id": order.paper_order_id,
+                            "unfilled_size": order.remaining,
+                            "released_reserved_cash": max(0.0, order.reserved_cash - (order.filled_size * order.limit_price)),
+                            "order_close_timestamp_utc": order.closed_at_utc,
+                        },
+                    )
 
         self.storage.save_runtime_state(
             ledger=self.ledger,
             orders=self.paper.open_orders,
             positions=self.paper.positions,
             dedupe=self.signal_engine.dedupe,
+        )
+
+    def _log_decision(
+        self,
+        market: ClassifiedMarket,
+        token_id: str,
+        event_type: str,
+        decision: str,
+        reason: str,
+        started: float,
+        payload: dict[str, str | float | int | bool | None],
+    ) -> None:
+        self.storage.save_event(
+            StructuredEvent(
+                run_id=self.run_id,
+                strategy_version=self.config.strategy_version,
+                market_id=market.market.market_id,
+                token_id=token_id,
+                event_type=event_type,
+                decision=decision,
+                reason_code=reason,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+                payload=payload,
+            )
         )
 
     def restore(self) -> bool:
@@ -130,6 +240,69 @@ class KorlicBot:
         self.ledger.holdings = dict(ledger.get("holdings") or {})
         self.signal_engine.dedupe = set(state.get("dedupe") or [])
         return True
+
+    def settle_position(self, market: ClassifiedMarket, winner_token_id: str | None) -> None:
+        position = self.paper.settle_market(market.market.market_id, winner_token_id)
+        settlement = self.paper.last_settlement_report
+        if position is None:
+            return
+        started = time.perf_counter()
+        if settlement is None:
+            self._log_decision(
+                market=market,
+                token_id=position.token_id,
+                event_type="PAPER_POSITION_PENDING_SETTLEMENT",
+                decision="pending_settlement",
+                reason="awaiting_resolution_feed",
+                started=started,
+                payload={"elapsed_since_market_end_seconds": 0, "next_settlement_check_seconds": 30},
+            )
+            return
+        event_type = "PAPER_POSITION_SETTLED_WIN" if settlement.result_class == "WIN" else "PAPER_POSITION_SETTLED_LOSS"
+        self._log_decision(
+            market=market,
+            token_id=position.token_id,
+            event_type=event_type,
+            decision="settled",
+            reason="resolved",
+            started=started,
+            payload={
+                "realized_pnl_gross": settlement.net_pnl,
+                "realized_pnl_net": settlement.net_pnl,
+                "roi_percent": settlement.roi_percent,
+                "holding_duration_seconds": settlement.holding_duration_seconds,
+            },
+        )
+        self.storage.save_pseudo_trade(
+            {
+                "pseudo_trade_id": f"pt-{self.run_id[:8]}-{market.market.market_id}",
+                "pseudo_order_id": f"po-{self.run_id[:8]}-{market.market.market_id}",
+                "run_id": self.run_id,
+                "strategy_version": self.config.strategy_version,
+                "market_id": market.market.market_id,
+                "token_id": position.token_id,
+                "side": "BUY",
+                "outcome": settlement.outcome,
+                "signal_timestamp_utc": position.opened_at_utc,
+                "fill_timestamp_utc": position.opened_at_utc,
+                "settlement_timestamp_utc": position.settled_at_utc or datetime.now(timezone.utc).isoformat(),
+                "seconds_to_end_at_signal": 0,
+                "signal_price": position.avg_price,
+                "average_fill_price": settlement.average_fill_price,
+                "requested_size": settlement.filled_size,
+                "filled_size": settlement.filled_size,
+                "gross_stake": settlement.gross_stake,
+                "gross_payoff": settlement.gross_payoff,
+                "net_pnl": settlement.net_pnl,
+                "roi_percent": settlement.roi_percent,
+                "result_class": settlement.result_class,
+                "trade_duration_seconds": settlement.holding_duration_seconds,
+                "partial_fill": 1 if settlement.partial_fill else 0,
+            }
+        )
+
+    def export_reports(self, output_dir: str) -> dict[str, str]:
+        return self.storage.export_csv_reports(output_dir)
 
     def _build_watchlist(self, candidates: list[ClassifiedMarket]) -> list[ClassifiedMarket]:
         output: list[ClassifiedMarket] = []
@@ -157,6 +330,7 @@ class KorlicBot:
         self.storage.save_event(
             StructuredEvent(
                 run_id=self.run_id,
+                strategy_version=self.config.strategy_version,
                 event_type="degraded",
                 decision="continue",
                 reason_code=degraded_reason,

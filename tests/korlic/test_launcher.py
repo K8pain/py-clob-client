@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from Korlic.launcher import _query_events, _tail_file
+from Korlic.launcher import _query_events, _query_trade_counters, _tail_file
 from Korlic.models import StructuredEvent
 from Korlic.storage import KorlicStorage
 
@@ -56,3 +56,41 @@ def test_tail_file_prints_last_lines(tmp_path: Path, capsys):
 
     assert rc == 0
     assert out == "dos\ntres\n"
+
+
+def test_query_trade_counters(tmp_path: Path):
+    db_path = tmp_path / "korlic.sqlite"
+    storage = KorlicStorage(str(db_path))
+    storage.save_pseudo_trade(
+        {
+            "pseudo_trade_id": "pt1",
+            "pseudo_order_id": "po1",
+            "run_id": "r1",
+            "strategy_version": "korlic-v1",
+            "market_id": "m1",
+            "token_id": "t1",
+            "side": "BUY",
+            "outcome": "YES",
+            "signal_timestamp_utc": "2026-01-01T00:00:00+00:00",
+            "fill_timestamp_utc": "2026-01-01T00:00:01+00:00",
+            "settlement_timestamp_utc": "2026-01-01T00:05:00+00:00",
+            "seconds_to_end_at_signal": 300,
+            "signal_price": 0.99,
+            "average_fill_price": 0.99,
+            "requested_size": 10.0,
+            "filled_size": 10.0,
+            "gross_stake": 9.9,
+            "gross_payoff": 10.0,
+            "net_pnl": 0.1,
+            "roi_percent": 1.0,
+            "result_class": "WON",
+            "trade_duration_seconds": 300,
+            "partial_fill": 0,
+        }
+    )
+
+    counters = _query_trade_counters(db_path)
+    assert counters["total_trades"] == 1
+    assert counters["won_trades"] == 1
+    assert counters["lost_trades"] == 0
+    assert counters["net_pnl"] == 0.1

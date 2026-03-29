@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import random
 import time
 import uuid
@@ -60,6 +61,7 @@ class KorlicBot:
     time_sync: TimeSync = field(default_factory=TimeSync)
     signal_engine: SignalEngine = field(default_factory=lambda: SignalEngine(SignalConfig()))
     ledger: Ledger = field(default_factory=lambda: Ledger(cash_available=1000.0))
+    logger: logging.Logger = field(default_factory=lambda: logging.getLogger("korlic-bot"))
 
     def __post_init__(self) -> None:
         self.discovery = DiscoveryEngine(classifier=self.classifier, parser_version="korlic-v1")
@@ -68,27 +70,41 @@ class KorlicBot:
 
     async def run_cycle(self) -> None:
         started = time.perf_counter()
+        self.logger.debug("run_cycle start run_id=%s", self.run_id)
         server_time = await self._retry(self.clob.get_server_time_ms, "degraded_clob_rest")
         if server_time is not None:
             self.time_sync.sync(server_time)
+            self.logger.debug("time sync updated server_time_ms=%s", server_time)
 
         markets = await self._retry(self.gamma.get_active_markets, "degraded_gamma")
         if markets is None:
+            self.logger.debug("no markets fetched; skipping cycle")
             return
+        self.logger.debug("active markets fetched count=%s", len(markets))
 
         fresh = self.discovery.build_universe(markets)
         self.universe = self.discovery.refresh_universe(self.universe, fresh)
         watchlist = self._build_watchlist(list(self.universe.markets.values()))
+        self.logger.debug("watchlist built count=%s", len(watchlist))
         token_ids = sorted({token for item in watchlist for token in item.market.token_ids})
         await self._ensure_subscription(token_ids)
 
         for market in watchlist:
+            self.logger.debug(
+                "evaluating market market_id=%s slug=%s accepting_orders=%s active=%s closed=%s",
+                market.market.market_id,
+                market.market.slug,
+                market.market.accepting_orders,
+                market.market.active,
+                market.market.closed,
+            )
             if not market.market.accepting_orders or not market.market.active or market.market.closed:
                 continue
             for token_id in market.market.token_ids:
                 end_epoch_ms = int(market.market.end_time.timestamp() * 1000)
                 book = await self._retry(lambda tid=token_id: self.clob.get_orderbook(tid), "degraded_clob_rest")
                 if book is None:
+                    self.logger.debug("orderbook missing token_id=%s", token_id)
                     continue
                 signal, reason = self.signal_engine.evaluate(
                     market=market,
@@ -99,6 +115,14 @@ class KorlicBot:
                     available_cash=self.ledger.cash_available,
                 )
                 seconds_to_end = self.time_sync.seconds_to(end_epoch_ms)
+                self.logger.debug(
+                    "signal evaluated market_id=%s token_id=%s seconds_to_end=%s reason=%s has_signal=%s",
+                    market.market.market_id,
+                    token_id,
+                    seconds_to_end,
+                    reason,
+                    signal is not None,
+                )
                 self._log_decision(
                     market=market,
                     token_id=token_id,
@@ -122,7 +146,16 @@ class KorlicBot:
                     continue
                 order = self.paper.create_order(signal)
                 if order is None:
+                    self.logger.debug("order rejected by paper engine market_id=%s token_id=%s", market.market.market_id, token_id)
                     continue
+                self.logger.debug(
+                    "pseudo order opened pseudo_order_id=%s market_id=%s token_id=%s size=%s limit=%s",
+                    order.paper_order_id,
+                    market.market.market_id,
+                    token_id,
+                    order.requested_size,
+                    order.limit_price,
+                )
                 self._log_decision(
                     market=market,
                     token_id=token_id,
@@ -145,6 +178,13 @@ class KorlicBot:
                 filled = self.paper.try_fill(order, book)
                 report = self.paper.last_fill_report
                 if filled > 0 and report is not None:
+                    self.logger.debug(
+                        "order filled pseudo_order_id=%s state=%s fill_size=%s avg_price=%s",
+                        order.paper_order_id,
+                        report.state,
+                        report.fill_size,
+                        report.average_fill_price,
+                    )
                     self._log_decision(
                         market=market,
                         token_id=token_id,
@@ -184,6 +224,12 @@ class KorlicBot:
                         )
                 if order.status.value == "OPEN" and seconds_to_end <= self.config.order_expiry_seconds:
                     self.paper.expire_order(order.paper_order_id, cancelled=False)
+                    self.logger.debug(
+                        "order expired pseudo_order_id=%s unfilled=%s seconds_to_end=%s",
+                        order.paper_order_id,
+                        order.remaining,
+                        seconds_to_end,
+                    )
                     self._log_decision(
                         market=market,
                         token_id=token_id,
@@ -204,6 +250,13 @@ class KorlicBot:
             orders=self.paper.open_orders,
             positions=self.paper.positions,
             dedupe=self.signal_engine.dedupe,
+        )
+        self.logger.debug(
+            "run_cycle end open_orders=%s open_positions=%s cash_available=%s cash_reserved=%s",
+            len(self.paper.open_orders),
+            len(self.paper.positions),
+            self.ledger.cash_available,
+            self.ledger.cash_reserved,
         )
 
     def _log_decision(
@@ -314,7 +367,9 @@ class KorlicBot:
 
     async def _ensure_subscription(self, token_ids: list[str]) -> None:
         if not token_ids:
+            self.logger.debug("no token ids to subscribe")
             return
+        self.logger.debug("subscribing token_count=%s", len(token_ids))
         if not await self.ws.is_healthy():
             await self.ws.subscribe(token_ids)
         else:
@@ -326,6 +381,13 @@ class KorlicBot:
                 return await operation()
             except Exception:
                 delay_ms = self.config.retry_base_ms * (2**attempt) + random.randint(0, self.config.retry_jitter_ms)
+                self.logger.debug(
+                    "retry failed reason=%s attempt=%s/%s delay_ms=%s",
+                    degraded_reason,
+                    attempt + 1,
+                    self.config.retry_max,
+                    delay_ms,
+                )
                 await asyncio.sleep(delay_ms / 1000)
         self.storage.save_event(
             StructuredEvent(

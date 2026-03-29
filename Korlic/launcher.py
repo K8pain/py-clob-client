@@ -168,9 +168,9 @@ def _print_specs() -> None:
         "",
         "=== Korlic launcher | comandos ===",
         "1) Run una vez:",
-        "   python -m Korlic.launcher run-once --factory adapters.korlic_factory:build_bot",
+        "   python -m Korlic.launcher run-once --factory Korlic.factory:build_bot",
         "2) Run continuo:",
-        "   python -m Korlic.launcher run-loop --factory adapters.korlic_factory:build_bot --interval-seconds 5",
+        "   python -m Korlic.launcher run-loop --factory Korlic.factory:build_bot --interval-seconds 5",
         "3) Ver log (tail -f):",
         "   python -m Korlic.launcher tail-log --follow",
         "4) Ver eventos persistidos (SQLite):",
@@ -178,7 +178,7 @@ def _print_specs() -> None:
         "5) Exportar reportes CSV:",
         "   python -m Korlic.launcher export-reports",
         "6) Pipeline MVP desatendido:",
-        "   python -m Korlic.launcher --all --factory adapters.korlic_factory:build_bot",
+        "   python -m Korlic.launcher --all --factory Korlic.factory:build_bot",
         "",
     ]
     print("\n".join(lines))

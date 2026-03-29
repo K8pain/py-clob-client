@@ -14,7 +14,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from ToTheMoon import MeanReversionPaperStrategy, StrategyConfig
+from ToTheMoon.strategies.automated_paper_v1_web import MeanReversionPaperStrategy, StrategyConfig
 from ToTheMoon.strategies.mvp1_market_maker.bin.runner import run_demo_cycle
 
 BASE_DIR = Path(__file__).resolve().parent

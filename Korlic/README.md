@@ -57,8 +57,21 @@
 - Añadir métricas/alertas si se despliega 24/7.
 
 ## 7) Contexto amplio
-- Limitación actual: no hay adapter real WS/CLOB/Gamma implementado aquí (solo protocolos).
+- Estado actual: `Korlic.factory:build_bot` ya conecta adapters REST públicos de Gamma + CLOB para discovery y orderbook.
+- No requiere API privada para paper mode (no publica órdenes reales).
+- La capa WS sigue como stub saludable por defecto.
 - Extensión futura: ejecución live enchufable sin tocar discovery/watch/signal/persistence.
+
+### Requisitos de API para paper mode (estado actual)
+- **Necesario:** acceso a endpoints públicos:
+  - Gamma: `https://gamma-api.polymarket.com/markets`
+  - CLOB: `https://clob.polymarket.com/time` y `.../book`
+- **No necesario:** private key ni API key de CLOB mientras se mantenga paper trading.
+- Variables opcionales:
+  - `KORLIC_GAMMA_BASE_URL` (default `https://gamma-api.polymarket.com`)
+  - `KORLIC_CLOB_HOST` (default `https://clob.polymarket.com`)
+  - `KORLIC_GAMMA_MIN_INTERVAL_SECONDS` (default `0.25`, ~4 req/s)
+  - `KORLIC_CLOB_MIN_INTERVAL_SECONDS` (default `0.05`, ~20 req/s)
 
 ## 8) Orquestador CLI (operación por terminal/SSH)
 Se añadió `Korlic/launcher.py` para operar Korlic desde CLI de forma conveniente.

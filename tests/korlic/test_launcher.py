@@ -1,7 +1,18 @@
 import json
 from pathlib import Path
 
-from Korlic.launcher import _append_trade_log, _build_parser, _load_bot, _query_event_diagnostics, _query_events, _query_trade_counters, _tail_file
+import logging
+
+from Korlic.launcher import (
+    _append_trade_log,
+    _build_parser,
+    _load_bot,
+    _query_event_diagnostics,
+    _query_events,
+    _query_trade_counters,
+    _setup_logger,
+    _tail_file,
+)
 from Korlic.models import StructuredEvent
 from Korlic.storage import KorlicStorage
 
@@ -211,3 +222,10 @@ def test_parser_supports_tail_trades_command():
     args = parser.parse_args(["tail-trades", "--follow"])
     assert args.command == "tail-trades"
     assert args.follow is True
+
+
+def test_setup_logger_enables_debug_for_launcher_and_bot(tmp_path: Path):
+    logger = _setup_logger(tmp_path / "launcher.log")
+    bot_logger = logging.getLogger("korlic-bot")
+    assert logger.level == logging.DEBUG
+    assert bot_logger.level == logging.DEBUG

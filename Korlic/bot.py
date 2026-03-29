@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import random
 import time
 import uuid
@@ -20,6 +21,8 @@ from .paper import PaperExecutionEngine
 from .runtime import TimeSync
 from .signal import SignalConfig, SignalEngine
 from .storage import KorlicStorage
+
+logger = logging.getLogger("korlic-bot")
 
 
 class GammaClient(Protocol):
@@ -68,27 +71,42 @@ class KorlicBot:
 
     async def run_cycle(self) -> None:
         started = time.perf_counter()
+        logger.debug("cycle.start run_id=%s", self.run_id)
         server_time = await self._retry(self.clob.get_server_time_ms, "degraded_clob_rest")
         if server_time is not None:
             self.time_sync.sync(server_time)
+            logger.debug("cycle.time_sync server_time_ms=%s", server_time)
 
         markets = await self._retry(self.gamma.get_active_markets, "degraded_gamma")
         if markets is None:
+            logger.debug("cycle.discovery skipped markets_fetch_failed")
             return
 
+        logger.debug("cycle.discovery active_markets=%s", len(markets))
         fresh = self.discovery.build_universe(markets)
         self.universe = self.discovery.refresh_universe(self.universe, fresh)
         watchlist = self._build_watchlist(list(self.universe.markets.values()))
+        logger.debug("cycle.watchlist near_expiry_markets=%s", len(watchlist))
         token_ids = sorted({token for item in watchlist for token in item.market.token_ids})
         await self._ensure_subscription(token_ids)
+        logger.debug("cycle.subscription token_ids=%s", len(token_ids))
 
         for market in watchlist:
             if not market.market.accepting_orders or not market.market.active or market.market.closed:
+                logger.debug(
+                    "cycle.market.skip market_id=%s accepting=%s active=%s closed=%s",
+                    market.market.market_id,
+                    market.market.accepting_orders,
+                    market.market.active,
+                    market.market.closed,
+                )
                 continue
+            logger.debug("cycle.market.evaluate market_id=%s", market.market.market_id)
             for token_id in market.market.token_ids:
                 end_epoch_ms = int(market.market.end_time.timestamp() * 1000)
                 book = await self._retry(lambda tid=token_id: self.clob.get_orderbook(tid), "degraded_clob_rest")
                 if book is None:
+                    logger.debug("cycle.token.skip market_id=%s token_id=%s reason=missing_orderbook", market.market.market_id, token_id)
                     continue
                 signal, reason = self.signal_engine.evaluate(
                     market=market,
@@ -99,6 +117,14 @@ class KorlicBot:
                     available_cash=self.ledger.cash_available,
                 )
                 seconds_to_end = self.time_sync.seconds_to(end_epoch_ms)
+                logger.debug(
+                    "cycle.signal market_id=%s token_id=%s seconds_to_end=%s signal=%s reason=%s",
+                    market.market.market_id,
+                    token_id,
+                    seconds_to_end,
+                    signal is not None,
+                    reason,
+                )
                 self._log_decision(
                     market=market,
                     token_id=token_id,
@@ -122,7 +148,20 @@ class KorlicBot:
                     continue
                 order = self.paper.create_order(signal)
                 if order is None:
+                    logger.debug(
+                        "cycle.order.skip market_id=%s token_id=%s reason=paper_engine_rejected",
+                        market.market.market_id,
+                        token_id,
+                    )
                     continue
+                logger.debug(
+                    "cycle.order.open market_id=%s token_id=%s order_id=%s size=%s price=%s",
+                    market.market.market_id,
+                    token_id,
+                    order.paper_order_id,
+                    order.requested_size,
+                    order.limit_price,
+                )
                 self._log_decision(
                     market=market,
                     token_id=token_id,
@@ -145,6 +184,15 @@ class KorlicBot:
                 filled = self.paper.try_fill(order, book)
                 report = self.paper.last_fill_report
                 if filled > 0 and report is not None:
+                    logger.debug(
+                        "cycle.order.fill market_id=%s token_id=%s order_id=%s fill_size=%s remaining=%s state=%s",
+                        market.market.market_id,
+                        token_id,
+                        order.paper_order_id,
+                        report.fill_size,
+                        report.remaining_size,
+                        report.state,
+                    )
                     self._log_decision(
                         market=market,
                         token_id=token_id,
@@ -184,6 +232,13 @@ class KorlicBot:
                         )
                 if order.status.value == "OPEN" and seconds_to_end <= self.config.order_expiry_seconds:
                     self.paper.expire_order(order.paper_order_id, cancelled=False)
+                    logger.debug(
+                        "cycle.order.expire market_id=%s token_id=%s order_id=%s unfilled=%s",
+                        market.market.market_id,
+                        token_id,
+                        order.paper_order_id,
+                        order.remaining,
+                    )
                     self._log_decision(
                         market=market,
                         token_id=token_id,
@@ -204,6 +259,14 @@ class KorlicBot:
             orders=self.paper.open_orders,
             positions=self.paper.positions,
             dedupe=self.signal_engine.dedupe,
+        )
+        logger.debug(
+            "cycle.end run_id=%s open_orders=%s open_positions=%s cash_available=%.4f cash_reserved=%.4f",
+            self.run_id,
+            len(self.paper.open_orders),
+            len(self.paper.positions),
+            self.ledger.cash_available,
+            self.ledger.cash_reserved,
         )
 
     def _log_decision(

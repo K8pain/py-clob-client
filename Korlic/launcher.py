@@ -24,11 +24,17 @@ DEFAULT_REPORTS_PATH = Path("var/korlic/reports")
 def _setup_logger(log_file: Path) -> logging.Logger:
     log_file.parent.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger("korlic-launcher")
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     logger.handlers.clear()
     handler = logging.FileHandler(log_file, encoding="utf-8")
     handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
     logger.addHandler(handler)
+
+    bot_logger = logging.getLogger("korlic-bot")
+    bot_logger.setLevel(logging.DEBUG)
+    bot_logger.handlers.clear()
+    bot_logger.addHandler(handler)
+    bot_logger.propagate = False
     return logger
 
 

@@ -31,12 +31,15 @@
 - Persistencia local con SQLite:
   - Tabla `state(key, value)` para snapshot de runtime.
   - Tabla `events(...)` para trazabilidad estructurada.
+  - Tabla `pseudo_trades(...)` para resultados settlement por pseudo-trade.
+  - Exportadores CSV snapshot-safe: `pseudo_trades.csv`, `strategy_summary.csv`, `signal_audit.csv`, `pseudo_orders.csv`.
 - Arquitectura:
   - `discovery.py`: universe + refresh sin duplicados.
   - `runtime.py`: sync de tiempo con drift.
   - `signal.py`: regla 0.99 + dedupe + liquidez.
   - `paper.py`: pseudo-limit-order, fill, expiración, settlement.
-  - `bot.py`: orquestación y adapters intercambiables (`GammaClient`, `ClobClient`, `WsClient`).
+- `bot.py`: orquestación y adapters intercambiables (`GammaClient`, `ClobClient`, `WsClient`).
+  - logging de negocio strategy-first con eventos de decisión y lifecycle (`NO_TRADE`, `SIGNAL_DETECTED`, `PSEUDO_ORDER_*`, `PAPER_POSITION_*`).
 
 ## 4) Testing y seguridad
 - Unit tests cubren discovery, señal, paper execution, persistence y reintentos.

@@ -195,10 +195,10 @@ def _to_market_record(item: dict) -> MarketRecord | None:
         slug=str(item.get("market_slug") or item.get("slug") or ""),
         token_ids=token_ids,
         end_time=end_time,
-        active=bool(item.get("active", True)),
-        closed=bool(item.get("closed", False)),
-        accepting_orders=bool(item.get("accepting_orders", item.get("acceptingOrders", True))),
-        enable_order_book=bool(item.get("enable_order_book", item.get("enableOrderBook", True))),
+        active=_parse_bool(item.get("active"), default=True),
+        closed=_parse_bool(item.get("closed"), default=False),
+        accepting_orders=_parse_bool(item.get("accepting_orders", item.get("acceptingOrders")), default=True),
+        enable_order_book=_parse_bool(item.get("enable_order_book", item.get("enableOrderBook")), default=True),
         tags=tuple(tag for tag in normalized_tags if tag),
         category=str(item.get("category")) if item.get("category") is not None else None,
         cadence_hint=str(item.get("cadence_hint")) if item.get("cadence_hint") is not None else None,
@@ -260,3 +260,20 @@ def _parse_epoch_value(value: int | float | str) -> int | None:
     if as_int < 10_000_000_000:
         return as_int * 1000
     return as_int
+
+
+def _parse_bool(value: object, *, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y"}:
+            return True
+        if normalized in {"false", "0", "no", "n"}:
+            return False
+        return default
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return default

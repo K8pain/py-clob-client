@@ -8,7 +8,7 @@ from .runtime import TimeSync
 
 @dataclass
 class SignalConfig:
-    entry_price: float = 0.99
+    entry_price: float = 0.60
     entry_seconds_threshold: int = 75
     min_operational_size: float = 10.0
     min_order_size: float = 5.0
@@ -37,8 +37,8 @@ class SignalEngine:
             return None, "skipped_missing_book"
 
         normalized = round(best_ask, 2)
-        if normalized != self.config.entry_price:
-            return None, "skipped_price_not_0_99"
+        if normalized > self.config.entry_price:
+            return None, "skipped_price_above_entry_threshold"
 
         size_by_cash = available_cash / self.config.entry_price
         if size_by_cash < self.config.min_order_size:

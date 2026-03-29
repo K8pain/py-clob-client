@@ -189,7 +189,7 @@ def test_append_trade_log_writes_incremental_rows(tmp_path: Path):
             token_id="t1",
             event_type="NO_TRADE",
             decision="ignored",
-            reason_code="skipped_price_not_0_99",
+            reason_code="skipped_price_above_entry_threshold",
             latency_ms=8,
             payload={},
         )

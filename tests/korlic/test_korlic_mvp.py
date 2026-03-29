@@ -74,7 +74,7 @@ def test_discovery_filters_and_classifies_5m():
 def test_signal_rejects_duplicate_and_depth():
     engine = SignalEngine(SignalConfig(min_operational_size=10, min_order_size=5))
     m = MarketClassifier().classify(_market())
-    book = OrderBookSnapshot(token_id="t_yes", bids=(), asks=(BookLevel(0.99, 20),), ts_ms=1)
+    book = OrderBookSnapshot(token_id="t_yes", bids=(), asks=(BookLevel(0.60, 20),), ts_ms=1)
 
     class T:
         def seconds_to(self, _):
@@ -93,7 +93,7 @@ def test_paper_fill_and_settlement():
     signal, _ = SignalEngine(SignalConfig()).evaluate(
         market=MarketClassifier().classify(_market()),
         token_id="t_yes",
-        book=OrderBookSnapshot(token_id="t_yes", bids=(), asks=(BookLevel(0.99, 50),), ts_ms=1),
+        book=OrderBookSnapshot(token_id="t_yes", bids=(), asks=(BookLevel(0.60, 50),), ts_ms=1),
         end_epoch_ms=10,
         time_sync=type("T", (), {"seconds_to": lambda *_: 10})(),
         available_cash=100,
@@ -101,7 +101,7 @@ def test_paper_fill_and_settlement():
     order = paper.create_order(signal)
     assert order is not None
 
-    filled = paper.try_fill(order, OrderBookSnapshot(token_id="t_yes", bids=(), asks=(BookLevel(0.99, 50),), ts_ms=1))
+    filled = paper.try_fill(order, OrderBookSnapshot(token_id="t_yes", bids=(), asks=(BookLevel(0.60, 50),), ts_ms=1))
     assert filled > 0
     pos = paper.settle_market("m1", "t_yes")
     assert pos is not None
@@ -111,8 +111,8 @@ def test_paper_fill_and_settlement():
 def test_bot_cycle_persists_state(tmp_path):
     market = _market(minutes=1)
     book = {
-        "t_yes": OrderBookSnapshot(token_id="t_yes", bids=(), asks=(BookLevel(0.99, 30),), ts_ms=1),
-        "t_no": OrderBookSnapshot(token_id="t_no", bids=(), asks=(BookLevel(0.99, 30),), ts_ms=1),
+        "t_yes": OrderBookSnapshot(token_id="t_yes", bids=(), asks=(BookLevel(0.60, 30),), ts_ms=1),
+        "t_no": OrderBookSnapshot(token_id="t_no", bids=(), asks=(BookLevel(0.60, 30),), ts_ms=1),
     }
     storage = KorlicStorage(str(tmp_path / "korlic.sqlite"))
     bot = KorlicBot(gamma=DummyGamma([market]), clob=DummyClob(book), ws=DummyWs(), storage=storage)

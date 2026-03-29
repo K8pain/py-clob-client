@@ -197,3 +197,24 @@ def test_public_clob_client_get_server_time_ms_accepts_scalar_time(monkeypatch):
 def test_parse_epoch_value_supports_seconds_and_millis():
     assert _parse_epoch_value(1774823321) == 1774823321000
     assert _parse_epoch_value("1774823321000") == 1774823321000
+
+
+def test_to_market_record_parses_string_booleans_without_marking_market_closed():
+    raw = {
+        "id": "531202",
+        "question": "BTC 5m above 100k?",
+        "slug": "btc-5m-above-100k",
+        "endDate": "2026-03-31T12:00:00Z",
+        "active": "true",
+        "closed": "false",
+        "acceptingOrders": "true",
+        "enableOrderBook": "true",
+        "clobTokenIds": "[\"tok-yes\", \"tok-no\"]",
+    }
+    market = _to_market_record(raw)
+    assert market is not None
+    assert market.active is True
+    assert market.closed is False
+    assert market.accepting_orders is True
+    assert market.enable_order_book is True
+    assert market.is_operable is True

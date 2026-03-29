@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -14,6 +15,8 @@ from py_clob_client.client import ClobClient
 from .bot import KorlicBot
 from .models import BookLevel, MarketRecord, OrderBookSnapshot
 from .storage import KorlicStorage
+
+logger = logging.getLogger("korlic-factory")
 
 
 @dataclass
@@ -31,10 +34,21 @@ class PublicGammaClient:
     def _fetch_active_markets(self) -> list[MarketRecord]:
         self._rate_limiter.wait_turn()
         url = f"{self.base_url.rstrip('/')}/markets"
-        response = httpx.get(url, timeout=self.timeout_seconds)
-        response.raise_for_status()
-        payload = response.json()
-        raw_markets = payload.get("data", payload) if isinstance(payload, dict) else payload
+        raw_markets: list[dict] = []
+        for params in (
+            {"active": "true", "closed": "false", "accepting_orders": "true", "limit": "500"},
+            {"active": "true", "closed": "false", "limit": "500"},
+            {},
+        ):
+            response = httpx.get(url, params=params, timeout=self.timeout_seconds)
+            response.raise_for_status()
+            payload = response.json()
+            candidate = payload.get("data", payload) if isinstance(payload, dict) else payload
+            if isinstance(candidate, list) and candidate:
+                raw_markets = candidate
+                logger.debug("gamma.fetch markets=%s params=%s", len(raw_markets), params or "none")
+                break
+
         if not isinstance(raw_markets, list):
             return []
         records: list[MarketRecord] = []

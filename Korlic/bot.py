@@ -83,6 +83,21 @@ class KorlicBot:
             return
 
         logger.debug("cycle.discovery active_markets=%s", len(markets))
+        operable_markets = sum(1 for market in markets if market.is_operable)
+        crypto_markets = sum(1 for market in markets if self.classifier.is_crypto(market))
+        candidate_markets = 0
+        for market in markets:
+            if not market.is_operable or not self.classifier.is_crypto(market):
+                continue
+            classified = self.classifier.classify(market)
+            if classified.status.value == "candidate_5m" and classified.confidence >= self.classifier.min_confidence:
+                candidate_markets += 1
+        logger.debug(
+            "cycle.discovery.filters operable=%s crypto=%s candidate_5m=%s",
+            operable_markets,
+            crypto_markets,
+            candidate_markets,
+        )
         fresh = self.discovery.build_universe(markets)
         self.universe = self.discovery.refresh_universe(self.universe, fresh)
         watchlist = self._build_watchlist(list(self.universe.markets.values()))

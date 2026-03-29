@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from Korlic.launcher import _query_events, _query_trade_counters, _tail_file
+from Korlic.launcher import _load_bot, _query_events, _query_trade_counters, _tail_file
 from Korlic.models import StructuredEvent
 from Korlic.storage import KorlicStorage
 
@@ -94,3 +94,9 @@ def test_query_trade_counters(tmp_path: Path):
     assert counters["won_trades"] == 1
     assert counters["lost_trades"] == 0
     assert counters["net_pnl"] == 0.1
+
+
+def test_load_bot_from_builtin_factory(tmp_path: Path):
+    db_path = tmp_path / "korlic.sqlite"
+    bot = _load_bot("Korlic.factory:build_bot", db_path)
+    assert str(bot.storage.db_path) == str(db_path)

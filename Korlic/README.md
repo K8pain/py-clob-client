@@ -70,13 +70,13 @@ python -m Korlic.launcher specs
 
 # ejecutar 1 ciclo
 python -m Korlic.launcher run-once \
-  --factory adapters.korlic_factory:build_bot \
+  --factory Korlic.factory:build_bot \
   --db-path var/korlic/korlic.sqlite \
   --log-file var/korlic/korlic-launcher.log
 
 # ejecutar en loop continuo
 python -m Korlic.launcher run-loop \
-  --factory adapters.korlic_factory:build_bot \
+  --factory Korlic.factory:build_bot \
   --interval-seconds 5
 
 # tail del log del launcher (equivalente a tail -f)
@@ -97,7 +97,7 @@ El launcher espera un `factory` en formato `modulo:funcion` que retorne `KorlicB
 Ejemplo:
 
 ```python
-# adapters/korlic_factory.py
+# Korlic/factory.py
 from Korlic.bot import KorlicBot
 from Korlic.storage import KorlicStorage
 

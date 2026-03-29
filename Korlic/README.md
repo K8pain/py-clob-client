@@ -59,3 +59,61 @@
 ## 7) Contexto amplio
 - Limitación actual: no hay adapter real WS/CLOB/Gamma implementado aquí (solo protocolos).
 - Extensión futura: ejecución live enchufable sin tocar discovery/watch/signal/persistence.
+
+## 8) Orquestador CLI (operación por terminal/SSH)
+Se añadió `Korlic/launcher.py` para operar Korlic desde CLI de forma conveniente.
+
+### Comandos
+```bash
+# ver ayuda operativa
+python -m Korlic.launcher specs
+
+# modo desatendido end-to-end (MVP)
+python -m Korlic.launcher --all \
+  --factory adapters.korlic_factory:build_bot \
+  --interval-seconds 5 \
+  --log-file var/korlic/korlic-launcher.log \
+  --progress-csv var/korlic/reports/trade_progress.csv
+
+# ejecutar 1 ciclo
+python -m Korlic.launcher run-once \
+  --factory adapters.korlic_factory:build_bot \
+  --db-path var/korlic/korlic.sqlite \
+  --log-file var/korlic/korlic-launcher.log
+
+# ejecutar en loop continuo
+python -m Korlic.launcher run-loop \
+  --factory adapters.korlic_factory:build_bot \
+  --interval-seconds 5
+
+# tail del log del launcher (equivalente a tail -f)
+python -m Korlic.launcher tail-log --follow
+
+# tail del progreso agregado por trade (CSV)
+tail -f var/korlic/reports/trade_progress.csv
+
+# consultar eventos persistidos en SQLite
+python -m Korlic.launcher events --limit 30
+
+# filtrar por tipo de evento
+python -m Korlic.launcher events --event-type SIGNAL_DETECTED --limit 50
+
+# exportar reportes CSV
+python -m Korlic.launcher export-reports --output-dir var/korlic/reports
+```
+
+### Contrato del factory
+El launcher espera un `factory` en formato `modulo:funcion` que retorne `KorlicBot`.
+Ejemplo:
+
+```python
+# adapters/korlic_factory.py
+from Korlic.bot import KorlicBot
+from Korlic.storage import KorlicStorage
+
+
+def build_bot(db_path: str) -> KorlicBot:
+    storage = KorlicStorage(db_path)
+    # construir gamma/clob/ws reales y retornar KorlicBot(...)
+    ...
+```

@@ -4,7 +4,7 @@ from Talic.runtime.degradation import update_state_for_error
 from Talic.runtime.errors import InternalError, PermanentError, TransientError
 from Talic.runtime.mode import ModeState
 from Talic.runtime.retry_policy import run_with_retry
-from Talic.runtime.validators import validate_handler_input
+from Talic.runtime.validators import validate_external_response, validate_handler_input
 
 
 class _Logger:
@@ -40,7 +40,6 @@ def test_invariant_violations_map_to_safe_degradation():
         )
         == ModeState.IDLE_SAFE
     )
-
     assert (
         update_state_for_error(
             ModeState.NORMAL,
@@ -50,3 +49,13 @@ def test_invariant_violations_map_to_safe_degradation():
         )
         == ModeState.IDLE_SAFE
     )
+
+
+def test_external_response_validator_rejects_error_payload():
+    with pytest.raises(ValueError, match="external response contains error"):
+        validate_external_response({"error": "upstream unavailable"})
+
+
+def test_external_response_validator_requires_mapping():
+    with pytest.raises(TypeError, match="external response must be a mapping"):
+        validate_external_response(["not", "a", "mapping"])

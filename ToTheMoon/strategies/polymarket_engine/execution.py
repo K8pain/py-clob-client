@@ -44,10 +44,13 @@ class PaperExecutionAdapter:
 
 
 class RealExecutionAdapter:
-    def __init__(self, client):
+    def __init__(self, client, rate_limiter=None):
         self.client = client
+        self.rate_limiter = rate_limiter
 
     def execute(self, order: OrderRequest) -> dict:
+        if self.rate_limiter is not None:
+            self.rate_limiter.acquire()
         return {
             "token_id": order.token_id,
             "side": order.side.value,

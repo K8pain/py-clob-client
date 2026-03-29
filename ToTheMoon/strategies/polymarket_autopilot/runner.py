@@ -20,23 +20,13 @@ def build_autopilot(base_path: Path, config: StrategyConfig | None = None) -> Po
     )
 
 
-def run_once(autopilot: PolymarketAutopilot, simulation_days: int = 1) -> Path:
-    aggregated = {"snapshots": 0, "executed_trades": 0, "closed_positions": 0}
-    for _ in range(max(1, simulation_days)):
-        result = autopilot.run_cycle()
-        for key in aggregated:
-            aggregated[key] += int(result[key])
-
+def run_once(autopilot: PolymarketAutopilot) -> Path:
+    result = autopilot.run_cycle()
     summary_path = autopilot.publish_daily_summary()
     print(
         "[polymarket-autopilot] ciclo completado | "
-        f"simulated_days={max(1, simulation_days)} | "
-        f"snapshots={aggregated['snapshots']} | "
-        f"executed_trades={aggregated['executed_trades']} | "
-        f"closed_positions={aggregated['closed_positions']}"
-    )
-    print(
-        "[polymarket-autopilot] nota: el resumen diario muestra solo operaciones de AYER (UTC)."
+        f"snapshots={result['snapshots']} | executed_trades={result['executed_trades']} | "
+        f"closed_positions={result['closed_positions']}"
     )
     print(f"[polymarket-autopilot] resumen guardado en: {summary_path}")
     return summary_path
@@ -52,20 +42,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--base-path",
         type=Path,
-        default=Path(__file__).resolve().parent,
+        default=Path("strategies/polymarket_autopilot"),
         help="Directorio base para data/ y logs/.",
     )
     parser.add_argument(
         "--mode",
         choices=["once", "scheduler"],
         default="once",
-        help="once: ejecuta uno o varios ciclos y genera resumen. scheduler: loop diario 08:00.",
-    )
-    parser.add_argument(
-        "--simulation-days",
-        type=int,
-        default=1,
-        help="Cantidad de ciclos consecutivos a ejecutar en modo once.",
+        help="once: ejecuta un ciclo y genera resumen. scheduler: loop diario 08:00.",
     )
     return parser.parse_args()
 
@@ -78,7 +62,7 @@ def main() -> int:
             run_scheduler(autopilot)
             return 0
 
-        run_once(autopilot, simulation_days=args.simulation_days)
+        run_once(autopilot)
         return 0
     except Exception as exc:
         print(f"[polymarket-autopilot] error: {exc}")

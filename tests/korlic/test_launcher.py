@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from Korlic.launcher import _load_bot, _query_events, _query_trade_counters, _tail_file
+from Korlic.launcher import _append_trade_log, _build_parser, _load_bot, _query_event_diagnostics, _query_events, _query_trade_counters, _tail_file
 from Korlic.models import StructuredEvent
 from Korlic.storage import KorlicStorage
 
@@ -100,3 +100,114 @@ def test_load_bot_from_builtin_factory(tmp_path: Path):
     db_path = tmp_path / "korlic.sqlite"
     bot = _load_bot("Korlic.factory:build_bot", db_path)
     assert str(bot.storage.db_path) == str(db_path)
+
+
+def test_query_event_diagnostics(tmp_path: Path):
+    db_path = tmp_path / "korlic.sqlite"
+    storage = KorlicStorage(str(db_path))
+    storage.save_event(
+        StructuredEvent(
+            run_id="r1",
+            strategy_version="korlic-v1",
+            market_id="m1",
+            token_id="t1",
+            event_type="NO_TRADE",
+            decision="ignored",
+            reason_code="skipped_outside_entry_window",
+            latency_ms=10,
+            payload={},
+        )
+    )
+    storage.save_event(
+        StructuredEvent(
+            run_id="r1",
+            strategy_version="korlic-v1",
+            market_id="m1",
+            token_id="t1",
+            event_type="NO_TRADE",
+            decision="ignored",
+            reason_code="skipped_outside_entry_window",
+            latency_ms=10,
+            payload={},
+        )
+    )
+    storage.save_event(
+        StructuredEvent(
+            run_id="r1",
+            strategy_version="korlic-v1",
+            market_id="m2",
+            token_id="t2",
+            event_type="SIGNAL_DETECTED",
+            decision="signaled",
+            reason_code="signal_candidate",
+            latency_ms=12,
+            payload={},
+        )
+    )
+    storage.save_event(
+        StructuredEvent(
+            run_id="r1",
+            strategy_version="korlic-v1",
+            market_id="m2",
+            token_id="t2",
+            event_type="PSEUDO_ORDER_OPENED",
+            decision="pseudo-traded",
+            reason_code="accepted_by_paper_engine",
+            latency_ms=15,
+            payload={},
+        )
+    )
+
+    diagnostics = _query_event_diagnostics(db_path)
+    assert diagnostics["evaluations"] == 3
+    assert diagnostics["signals"] == 1
+    assert diagnostics["opened_orders"] == 1
+    assert diagnostics["fills"] == 0
+    assert diagnostics["top_no_trade_reasons"] == [{"reason_code": "skipped_outside_entry_window", "count": 2}]
+
+
+def test_append_trade_log_writes_incremental_rows(tmp_path: Path):
+    db_path = tmp_path / "korlic.sqlite"
+    trade_log = tmp_path / "korlic-trades.log"
+    storage = KorlicStorage(str(db_path))
+    storage.save_event(
+        StructuredEvent(
+            run_id="r1",
+            strategy_version="korlic-v1",
+            market_id="m1",
+            token_id="t1",
+            event_type="NO_TRADE",
+            decision="ignored",
+            reason_code="skipped_price_not_0_99",
+            latency_ms=8,
+            payload={},
+        )
+    )
+    storage.save_event(
+        StructuredEvent(
+            run_id="r1",
+            strategy_version="korlic-v1",
+            market_id="m1",
+            token_id="t1",
+            event_type="PSEUDO_ORDER_OPENED",
+            decision="pseudo-traded",
+            reason_code="accepted_by_paper_engine",
+            latency_ms=10,
+            payload={},
+        )
+    )
+    last_id = _append_trade_log(db_path, trade_log, since_id=0)
+    text = trade_log.read_text(encoding="utf-8")
+    assert "NO_TRADE" in text
+    assert "PSEUDO_ORDER_OPENED" in text
+    assert last_id > 0
+
+    second = _append_trade_log(db_path, trade_log, since_id=last_id)
+    assert second == last_id
+
+
+def test_parser_supports_tail_trades_command():
+    parser = _build_parser()
+    args = parser.parse_args(["tail-trades", "--follow"])
+    assert args.command == "tail-trades"
+    assert args.follow is True

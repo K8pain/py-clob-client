@@ -5,6 +5,8 @@ from typing import Any, Callable
 
 import httpx
 
+from ToTheMoon.api import RateLimitPolicy
+
 from .models import MarketCatalogEntry, TokenCatalogEntry
 
 
@@ -15,12 +17,23 @@ class DiscoveryResult:
 
 
 class GammaDiscoveryClient:
-    def __init__(self, base_url: str, get_json: Callable[[str], Any] | None = None):
+    def __init__(
+        self,
+        base_url: str,
+        get_json: Callable[[str], Any] | None = None,
+        http_client: Any | None = None,
+    ):
         self.base_url = base_url.rstrip("/")
         self._get_json = get_json or self._default_get_json
+        self._http_client = http_client
+        if self._http_client is not None:
+            self._http_client.register_limit(RateLimitPolicy("gamma-markets", 250, 10.0))
 
     def fetch_markets(self, path: str = "/markets") -> list[dict[str, Any]]:
-        payload = self._get_json(f"{self.base_url}{path}")
+        if self._http_client is not None:
+            payload = self._http_client.get(f"{self.base_url}{path}", policy_name="gamma-markets").json()
+        else:
+            payload = self._get_json(f"{self.base_url}{path}")
         if isinstance(payload, dict) and "data" in payload:
             return list(payload["data"])
         return list(payload)

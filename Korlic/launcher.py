@@ -121,6 +121,48 @@ def _query_events(db_path: Path, limit: int, event_type: str | None) -> list[dic
     return result
 
 
+def _query_trade_counters(db_path: Path) -> dict[str, object]:
+    with sqlite3.connect(db_path) as conn:
+        total, net_pnl = conn.execute("SELECT COUNT(*), COALESCE(SUM(net_pnl), 0) FROM pseudo_trades").fetchone()
+        wins = conn.execute("SELECT COUNT(*) FROM pseudo_trades WHERE result_class='WON'").fetchone()[0]
+        losses = conn.execute("SELECT COUNT(*) FROM pseudo_trades WHERE result_class='LOST'").fetchone()[0]
+        pushes = conn.execute("SELECT COUNT(*) FROM pseudo_trades WHERE result_class='PUSH'").fetchone()[0]
+    return {
+        "total_trades": total,
+        "won_trades": wins,
+        "lost_trades": losses,
+        "push_trades": pushes,
+        "net_pnl": float(net_pnl),
+    }
+
+
+def _print_tail(path: Path, lines: int, title: str) -> None:
+    if not path.exists():
+        print(f"[{title}] no existe: {path}")
+        return
+    print(f"[{title}] {path}")
+    with path.open("r", encoding="utf-8") as fh:
+        for line in fh.readlines()[-lines:]:
+            print(line, end="")
+
+
+def _run_all(args: argparse.Namespace) -> int:
+    db_path = Path(args.db_path)
+    log_file = Path(args.log_file)
+    logger = _setup_logger(log_file)
+
+    if args.factory:
+        bot = _load_bot(args.factory, db_path)
+        asyncio.run(_run_once(bot, logger))
+
+    storage = KorlicStorage(args.db_path)
+    files = storage.export_csv_reports(args.output_dir)
+    print(json.dumps({"reports": files, "trades": _query_trade_counters(db_path)}, indent=2, ensure_ascii=False))
+    _print_tail(log_file, lines=args.lines, title="launcher-log tail")
+    _print_tail(Path(files["pseudo_trades"]), lines=args.lines, title="pseudo_trades.csv tail")
+    return 0
+
+
 def _print_specs() -> None:
     lines = [
         "",
@@ -135,6 +177,8 @@ def _print_specs() -> None:
         "   python -m Korlic.launcher events --limit 30",
         "5) Exportar reportes CSV:",
         "   python -m Korlic.launcher export-reports",
+        "6) Pipeline MVP desatendido:",
+        "   python -m Korlic.launcher --all --factory adapters.korlic_factory:build_bot",
         "",
     ]
     print("\n".join(lines))
@@ -142,7 +186,13 @@ def _print_specs() -> None:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Orquestador CLI de Korlic para operación por SSH.")
-    sub = parser.add_subparsers(dest="command", required=True)
+    parser.add_argument("--all", action="store_true", help="Ejecuta pipeline MVP: run-once, reportes y tails.")
+    parser.add_argument("--factory", help="Factory 'modulo:funcion' que retorna KorlicBot para --all.")
+    parser.add_argument("--db-path", default=str(DEFAULT_DB_PATH))
+    parser.add_argument("--log-file", default=str(DEFAULT_LOG_PATH))
+    parser.add_argument("--output-dir", default=str(DEFAULT_REPORTS_PATH))
+    parser.add_argument("-n", "--lines", type=int, default=30, help="Líneas para tail en --all.")
+    sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("specs", help="Muestra comandos sugeridos.")
 
@@ -177,6 +227,12 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+
+    if args.all:
+        return _run_all(args)
+
+    if not args.command:
+        parser.error("debes indicar un comando o usar --all")
 
     if args.command == "specs":
         _print_specs()

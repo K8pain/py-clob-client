@@ -42,7 +42,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--base-path",
         type=Path,
-        default=Path("strategies/polymarket_autopilot"),
+        default=Path(__file__).resolve().parent,
         help="Directorio base para data/ y logs/.",
     )
     parser.add_argument(

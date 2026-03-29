@@ -1,0 +1,66 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from .models import ClassifiedMarket, OrderBookSnapshot, SignalCandidate
+from .runtime import TimeSync
+
+
+@dataclass
+class SignalConfig:
+    entry_price: float = 0.99
+    entry_seconds_threshold: int = 75
+    min_operational_size: float = 10.0
+    min_order_size: float = 5.0
+
+
+@dataclass
+class SignalEngine:
+    config: SignalConfig
+    dedupe: set[str] = field(default_factory=set)
+
+    def evaluate(
+        self,
+        market: ClassifiedMarket,
+        token_id: str,
+        book: OrderBookSnapshot,
+        end_epoch_ms: int,
+        time_sync: TimeSync,
+        available_cash: float,
+    ) -> tuple[SignalCandidate | None, str]:
+        seconds_to_end = time_sync.seconds_to(end_epoch_ms)
+        if seconds_to_end > self.config.entry_seconds_threshold:
+            return None, "skipped_outside_entry_window"
+
+        best_ask = book.best_ask()
+        if best_ask is None:
+            return None, "skipped_missing_book"
+
+        normalized = round(best_ask, 2)
+        if normalized != self.config.entry_price:
+            return None, "skipped_price_not_0_99"
+
+        size_by_cash = available_cash / self.config.entry_price
+        if size_by_cash < self.config.min_order_size:
+            return None, "skipped_insufficient_funds"
+
+        visible_depth = book.depth_at_or_better(self.config.entry_price)
+        if visible_depth < self.config.min_operational_size:
+            return None, "skipped_insufficient_depth"
+
+        dedupe_key = f"{market.market.market_id}:{token_id}:{seconds_to_end // self.config.entry_seconds_threshold}"
+        if dedupe_key in self.dedupe:
+            return None, "skipped_duplicate_signal"
+
+        self.dedupe.add(dedupe_key)
+        size = min(visible_depth, size_by_cash)
+        return (
+            SignalCandidate(
+                market_id=market.market.market_id,
+                token_id=token_id,
+                price=self.config.entry_price,
+                size=size,
+                seconds_to_end=seconds_to_end,
+            ),
+            "signal_candidate",
+        )

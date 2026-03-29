@@ -14,6 +14,9 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+from ToTheMoon import MeanReversionPaperStrategy, StrategyConfig
+from ToTheMoon.strategies.mvp1_market_maker.bin.runner import run_demo_cycle
+
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG_PATH = BASE_DIR / "launcher_config.json"
 
@@ -177,8 +180,6 @@ def _run_subprocess(command: list[str], logger: logging.Logger) -> int:
 def _run_mean_reversion(logger: logging.Logger, config: dict[str, Any]) -> int:
     page_limit = int(config.get("mean_reversion", {}).get("page_limit", 3))
     logger.info("Iniciando mean-reversion run_once(page_limit=%s)", page_limit)
-    from ToTheMoon.strategies.automated_paper_v1_web.mean_reversion import MeanReversionPaperStrategy, StrategyConfig
-
     strategy = MeanReversionPaperStrategy(StrategyConfig())
     trades = strategy.run_once(page_limit=page_limit)
     print(json.dumps([trade.__dict__ for trade in trades], indent=2, ensure_ascii=False))
@@ -188,8 +189,6 @@ def _run_mean_reversion(logger: logging.Logger, config: dict[str, Any]) -> int:
 
 def _run_mvp1_demo(logger: logging.Logger, _: dict[str, Any]) -> int:
     logger.info("Iniciando run_demo_cycle de mvp1_market_maker")
-    from ToTheMoon.strategies.mvp1_market_maker.bin.runner import run_demo_cycle
-
     summary = run_demo_cycle()
     print(json.dumps(summary, indent=2, ensure_ascii=False))
     logger.info("MVP1 demo completado")

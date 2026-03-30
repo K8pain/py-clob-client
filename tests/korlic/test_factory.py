@@ -7,6 +7,8 @@ from Korlic.factory import (
     PublicGammaClient,
     _IntervalRateLimiter,
     _extract_market_items,
+    _flatten_event_markets,
+    _is_bitcoin_5m_market,
     _parse_end_time,
     _parse_epoch_value,
     _parse_token_ids_from_clob_ids,
@@ -62,8 +64,9 @@ def test_interval_rate_limiter_sleeps_when_called_too_fast(monkeypatch):
     assert calls == [0.25]
 
 
-def test_public_gamma_client_tries_limit_first(monkeypatch):
+def test_public_gamma_client_uses_events_endpoint_and_filters_bitcoin_5m(monkeypatch):
     calls: list[dict] = []
+    called_urls: list[str] = []
 
     class DummyResponse:
         def __init__(self, payload):
@@ -77,26 +80,38 @@ def test_public_gamma_client_tries_limit_first(monkeypatch):
 
     market_payload = [
         {
-            "id": "123",
-            "event_id": "evt-1",
-            "question": "BTC 5m above 100k?",
-            "slug": "btc-5m-above-100k",
-            "tokens": [{"token_id": "tok-yes"}, {"token_id": "tok-no"}],
-            "end_date_iso": "2026-03-29T21:20:47.138Z",
-            "active": True,
-            "closed": False,
-            "accepting_orders": True,
-            "enable_order_book": True,
-            "tags": [{"slug": "crypto"}],
-            "category": "crypto",
+            "id": "evt-1",
+            "markets": [
+                {
+                    "id": "123",
+                    "event_id": "evt-1",
+                    "question": "BTC 5m above 100k?",
+                    "slug": "btc-5m-above-100k",
+                    "tokens": [{"token_id": "tok-yes"}, {"token_id": "tok-no"}],
+                    "end_date_iso": "2026-03-29T21:20:47.138Z",
+                    "active": True,
+                    "closed": False,
+                    "accepting_orders": True,
+                    "enable_order_book": True,
+                    "tags": [{"slug": "crypto"}],
+                    "category": "crypto",
+                },
+                {
+                    "id": "124",
+                    "event_id": "evt-1",
+                    "question": "ETH 5m above 4k?",
+                    "slug": "eth-5m-above-4k",
+                    "tokens": [{"token_id": "tok-yes-2"}, {"token_id": "tok-no-2"}],
+                    "end_date_iso": "2026-03-29T21:20:47.138Z",
+                },
+            ],
         }
     ]
 
     def fake_get(url, params=None, timeout=20.0):
+        called_urls.append(url)
         calls.append(params or {})
-        if params and params.get("limit") == "500":
-            return DummyResponse(market_payload)
-        return DummyResponse([])
+        return DummyResponse(market_payload)
 
     monkeypatch.setattr("Korlic.factory.httpx.get", fake_get)
 
@@ -104,7 +119,9 @@ def test_public_gamma_client_tries_limit_first(monkeypatch):
     markets = client._fetch_active_markets()
 
     assert len(markets) == 1
-    assert calls[0] == {"limit": "500"}
+    assert markets[0].market_id == "123"
+    assert called_urls[0].endswith("/events")
+    assert calls[0] == {"active": "true", "closed": "false", "limit": "100", "offset": "0"}
 
 
 def test_public_gamma_client_accepts_markets_payload_shape(monkeypatch):
@@ -156,6 +173,17 @@ def test_extract_market_items_handles_common_wrappers():
     assert _extract_market_items({"data": [1]}) == [1]
     assert _extract_market_items({"markets": [2]}) == [2]
     assert _extract_market_items({"results": [3]}) == [3]
+
+
+def test_flatten_event_markets_flattens_nested_markets():
+    payload = [{"id": "evt-1", "markets": [{"id": "m1"}, {"id": "m2"}]}, {"id": "m3"}]
+    assert _flatten_event_markets(payload) == [{"id": "m1"}, {"id": "m2"}, {"id": "m3"}]
+
+
+def test_is_bitcoin_5m_market_requires_bitcoin_and_5m():
+    assert _is_bitcoin_5m_market({"question": "BTC 5m above 100k?"}) is True
+    assert _is_bitcoin_5m_market({"question": "ETH 5m above 4k?"}) is False
+    assert _is_bitcoin_5m_market({"question": "BTC above 100k?"}) is False
 
 
 def test_parse_token_ids_from_clob_ids_handles_json_string():

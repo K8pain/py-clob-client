@@ -34,23 +34,16 @@ class PublicGammaClient:
 
     def _fetch_active_markets(self) -> list[MarketRecord]:
         self._rate_limiter.wait_turn()
-        url = f"{self.base_url.rstrip('/')}/markets"
-        raw_markets: list[dict] = []
-        for params in (
-            {"limit": "500"},
-            {"active": "true", "closed": "false", "limit": "500"},
-            {"active": "true", "closed": "false", "accepting_orders": "true", "limit": "500"},
-            {},
-        ):
-            response = httpx.get(url, params=params, timeout=self.timeout_seconds)
-            response.raise_for_status()
-            payload = response.json()
-            candidate = _extract_market_items(payload)
-            self._debug_payload_shape(payload, candidate, params)
-            if isinstance(candidate, list) and candidate:
-                raw_markets = candidate
-                logger.debug("gamma.fetch markets=%s params=%s", len(raw_markets), params or "none")
-                break
+        url = f"{self.base_url.rstrip('/')}/events"
+        params = {"active": "true", "closed": "false", "limit": "100", "offset": "0"}
+        response = httpx.get(url, params=params, timeout=self.timeout_seconds)
+        response.raise_for_status()
+        payload = response.json()
+        candidate = _extract_market_items(payload)
+        self._debug_payload_shape(payload, candidate, params)
+        raw_markets = _flatten_event_markets(candidate)
+        raw_markets = [item for item in raw_markets if _is_bitcoin_5m_market(item)]
+        logger.debug("gamma.fetch markets=%s params=%s", len(raw_markets), params)
 
         if not isinstance(raw_markets, list):
             return []
@@ -230,6 +223,35 @@ def _extract_market_items(payload: object) -> object:
         if isinstance(value, list):
             return value
     return payload
+
+
+def _flatten_event_markets(payload_items: object) -> list[dict]:
+    if not isinstance(payload_items, list):
+        return []
+    flat_markets: list[dict] = []
+    for item in payload_items:
+        if not isinstance(item, dict):
+            continue
+        event_markets = item.get("markets")
+        if isinstance(event_markets, list):
+            for market in event_markets:
+                if isinstance(market, dict):
+                    flat_markets.append(market)
+            continue
+        flat_markets.append(item)
+    return flat_markets
+
+
+def _is_bitcoin_5m_market(item: dict) -> bool:
+    text = " ".join(
+        [
+            str(item.get("question") or ""),
+            str(item.get("slug") or item.get("market_slug") or ""),
+        ]
+    ).lower()
+    has_bitcoin = "bitcoin" in text or "btc" in text
+    has_5m = "5m" in text or "5 min" in text or "5min" in text
+    return has_bitcoin and has_5m
 
 
 def _parse_token_ids_from_clob_ids(value: object) -> tuple[str, ...]:

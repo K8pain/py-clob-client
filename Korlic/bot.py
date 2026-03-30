@@ -86,18 +86,63 @@ class KorlicBot:
         operable_markets = sum(1 for market in markets if market.is_operable)
         crypto_markets = sum(1 for market in markets if self.classifier.is_crypto(market))
         candidate_markets = 0
+        filter_stats: dict[str, int] = {
+            "inactive": 0,
+            "closed": 0,
+            "not_accepting_orders": 0,
+            "orderbook_disabled": 0,
+            "non_crypto": 0,
+            "not_candidate_5m": 0,
+            "low_confidence": 0,
+        }
         for market in markets:
-            if not market.is_operable or not self.classifier.is_crypto(market):
+            if not market.active:
+                filter_stats["inactive"] += 1
+            if market.closed:
+                filter_stats["closed"] += 1
+            if not market.accepting_orders:
+                filter_stats["not_accepting_orders"] += 1
+            if not market.enable_order_book:
+                filter_stats["orderbook_disabled"] += 1
+            if not market.is_operable:
+                continue
+            if not self.classifier.is_crypto(market):
+                filter_stats["non_crypto"] += 1
                 continue
             classified = self.classifier.classify(market)
-            if classified.status.value == "candidate_5m" and classified.confidence >= self.classifier.min_confidence:
-                candidate_markets += 1
+            if classified.status.value != "candidate_5m":
+                filter_stats["not_candidate_5m"] += 1
+                continue
+            if classified.confidence < self.classifier.min_confidence:
+                filter_stats["low_confidence"] += 1
+                continue
+            candidate_markets += 1
         logger.debug(
-            "cycle.discovery.filters operable=%s crypto=%s candidate_5m=%s",
+            "cycle.discovery.filters operable=%s crypto=%s candidate_5m=%s inactive=%s closed=%s not_accepting_orders=%s orderbook_disabled=%s non_crypto=%s not_candidate_5m=%s low_confidence=%s",
             operable_markets,
             crypto_markets,
             candidate_markets,
+            filter_stats["inactive"],
+            filter_stats["closed"],
+            filter_stats["not_accepting_orders"],
+            filter_stats["orderbook_disabled"],
+            filter_stats["non_crypto"],
+            filter_stats["not_candidate_5m"],
+            filter_stats["low_confidence"],
         )
+        if operable_markets == 0:
+            sample = [
+                {
+                    "market_id": market.market_id,
+                    "active": market.active,
+                    "closed": market.closed,
+                    "accepting_orders": market.accepting_orders,
+                    "enable_order_book": market.enable_order_book,
+                    "slug": market.slug,
+                }
+                for market in markets[:5]
+            ]
+            logger.debug("cycle.discovery.no_operable sample=%s", sample)
         fresh = self.discovery.build_universe(markets)
         self.universe = self.discovery.refresh_universe(self.universe, fresh)
         watchlist = self._build_watchlist(list(self.universe.markets.values()))
@@ -123,6 +168,21 @@ class KorlicBot:
                 if book is None:
                     logger.debug("cycle.token.skip market_id=%s token_id=%s reason=missing_orderbook", market.market.market_id, token_id)
                     continue
+                best_bid = max((b.price for b in book.bids), default=None)
+                best_ask = book.best_ask()
+                logger.debug(
+                    "cycle.orderbook market_id=%s token_id=%s best_bid=%s best_ask=%s bids=%s asks=%s depth_at_entry=%s top_bid_levels=%s top_ask_levels=%s ts_ms=%s",
+                    market.market.market_id,
+                    token_id,
+                    best_bid,
+                    best_ask,
+                    len(book.bids),
+                    len(book.asks),
+                    book.depth_at_or_better(self.signal_engine.config.entry_price),
+                    [(level.price, level.size) for level in book.bids[:3]],
+                    [(level.price, level.size) for level in book.asks[:3]],
+                    book.ts_ms,
+                )
                 signal, reason = self.signal_engine.evaluate(
                     market=market,
                     token_id=token_id,
@@ -149,8 +209,8 @@ class KorlicBot:
                     started=started,
                     payload={
                         "seconds_to_end": seconds_to_end,
-                        "best_bid": max((b.price for b in book.bids), default=None),
-                        "best_ask": book.best_ask(),
+                        "best_bid": best_bid,
+                        "best_ask": best_ask,
                         "visible_depth_at_target": book.depth_at_or_better(self.signal_engine.config.entry_price),
                         "signal_price": self.signal_engine.config.entry_price,
                         "market_slug": market.market.slug,

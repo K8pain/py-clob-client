@@ -9,9 +9,10 @@ from .runtime import TimeSync
 @dataclass
 class SignalConfig:
     entry_price: float = 0.60
-    entry_seconds_threshold: int = 75
+    entry_seconds_threshold: int = 600
     min_operational_size: float = 10.0
     min_order_size: float = 5.0
+    max_stake_per_trade: float = 25.0
 
 
 @dataclass
@@ -36,11 +37,14 @@ class SignalEngine:
         if best_ask is None:
             return None, "skipped_missing_book"
 
+        # CLOB binary markets are quoted in probability dollars [0.00, 1.00].
+        # Example: 60c is represented as 0.60 (not 60).
         normalized = round(best_ask, 2)
         if normalized > self.config.entry_price:
             return None, "skipped_price_above_entry_threshold"
 
-        size_by_cash = available_cash / self.config.entry_price
+        budget_for_trade = min(available_cash, self.config.max_stake_per_trade)
+        size_by_cash = budget_for_trade / self.config.entry_price
         if size_by_cash < self.config.min_order_size:
             return None, "skipped_insufficient_funds"
 

@@ -13,7 +13,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "KORLIC_v2"))
 from Korlic_v2.bot import KorlicBot
 from Korlic_v2.factory import PublicGammaClient
 from Korlic_v2.launcher import _run_all
-from Korlic_v2.models import BookLevel, MarketRecord, OrderBookSnapshot
+from Korlic_v2.models import BookLevel, ClassificationStatus, ClassifiedMarket, MarketRecord, OrderBookSnapshot
+from Korlic_v2.signal import SignalConfig, SignalEngine
+from Korlic_v2.runtime import TimeSync
 from Korlic_v2.storage import KorlicStorage
 
 
@@ -168,3 +170,122 @@ def test_bot_evaluates_non_crypto_operable_markets(tmp_path: Path):
             "SELECT COUNT(*) FROM events WHERE market_id='m1' AND event_type IN ('SIGNAL_DETECTED', 'NO_TRADE')"
         ).fetchone()[0]
     assert rows > 0
+
+
+def test_signal_uses_per_trade_budget_instead_of_full_cash():
+    market = MarketRecord(
+        market_id="m-budget",
+        event_id="e-budget",
+        question="Budget control",
+        slug="btc-updown-5m-budget",
+        token_ids=("yes", "no"),
+        end_time=datetime.now(timezone.utc) + timedelta(seconds=180),
+        active=True,
+        closed=False,
+        accepting_orders=True,
+        enable_order_book=True,
+    )
+    book = OrderBookSnapshot(
+        token_id="yes",
+        bids=(),
+        asks=(BookLevel(0.6, 1_000.0),),
+        ts_ms=int(datetime.now(timezone.utc).timestamp() * 1000),
+    )
+    engine = SignalEngine(
+        SignalConfig(
+            entry_price=0.6,
+            entry_seconds_threshold=600,
+            min_operational_size=10.0,
+            min_order_size=5.0,
+            max_stake_per_trade=30.0,
+        )
+    )
+    sync = TimeSync()
+    sync.sync(int(datetime.now(timezone.utc).timestamp() * 1000))
+
+    signal, reason = engine.evaluate(
+        market=ClassifiedMarket(
+            market=market,
+            status=ClassificationStatus.CANDIDATE_5M,
+            confidence=1.0,
+            method="test",
+        ),
+        token_id="yes",
+        book=book,
+        end_epoch_ms=int(market.end_time.timestamp() * 1000),
+        time_sync=sync,
+        available_cash=1_000.0,
+    )
+
+    assert reason == "signal_candidate"
+    assert signal is not None
+    assert signal.size == 50.0
+
+
+def test_signal_treats_60c_as_0_60_not_60():
+    market = MarketRecord(
+        market_id="m-price-units",
+        event_id="e-price-units",
+        question="Price units",
+        slug="btc-updown-5m-price-units",
+        token_ids=("yes", "no"),
+        end_time=datetime.now(timezone.utc) + timedelta(seconds=120),
+        active=True,
+        closed=False,
+        accepting_orders=True,
+        enable_order_book=True,
+    )
+    engine = SignalEngine(
+        SignalConfig(
+            entry_price=0.6,
+            entry_seconds_threshold=600,
+            min_operational_size=10.0,
+            min_order_size=5.0,
+            max_stake_per_trade=30.0,
+        )
+    )
+    sync = TimeSync()
+    sync.sync(int(datetime.now(timezone.utc).timestamp() * 1000))
+
+    signal_ok, reason_ok = engine.evaluate(
+        market=ClassifiedMarket(
+            market=market,
+            status=ClassificationStatus.CANDIDATE_5M,
+            confidence=1.0,
+            method="test",
+        ),
+        token_id="yes",
+        book=OrderBookSnapshot(token_id="yes", bids=(), asks=(BookLevel(0.6, 100.0),), ts_ms=1),
+        end_epoch_ms=int(market.end_time.timestamp() * 1000),
+        time_sync=sync,
+        available_cash=100.0,
+    )
+    assert signal_ok is not None
+    assert reason_ok == "signal_candidate"
+
+    signal_bad, reason_bad = engine.evaluate(
+        market=ClassifiedMarket(
+            market=MarketRecord(
+                market_id="m-price-units-2",
+                event_id="e-price-units-2",
+                question="Price units 2",
+                slug="btc-updown-5m-price-units-2",
+                token_ids=("yes", "no"),
+                end_time=datetime.now(timezone.utc) + timedelta(seconds=120),
+                active=True,
+                closed=False,
+                accepting_orders=True,
+                enable_order_book=True,
+            ),
+            status=ClassificationStatus.CANDIDATE_5M,
+            confidence=1.0,
+            method="test",
+        ),
+        token_id="yes",
+        book=OrderBookSnapshot(token_id="yes", bids=(), asks=(BookLevel(60.0, 100.0),), ts_ms=1),
+        end_epoch_ms=int((datetime.now(timezone.utc) + timedelta(seconds=120)).timestamp() * 1000),
+        time_sync=sync,
+        available_cash=100.0,
+    )
+    assert signal_bad is None
+    assert reason_bad == "skipped_price_above_entry_threshold"

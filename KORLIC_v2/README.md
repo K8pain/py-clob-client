@@ -1,13 +1,13 @@
 # KORLIC_v2
 
-Este directorio contiene un clon completo del paquete `Korlic` dentro de `KORLIC_v2/Korlic`.
+Este directorio contiene un clon completo del paquete `Korlic` dentro de `KORLIC_v2/Korlic_v2`.
 
 ## Lanzador dentro de KORLIC_v2
 
 Ejecuta el lanzador desde esta carpeta (`cd KORLIC_v2`) con:
 
 ```bash
-python -m Korlic.launcher --all --factory Korlic.factory:build_bot --keep-running
+python -m Korlic_v2.launcher --all --factory Korlic_v2.factory:build_bot --keep-running
 ```
 
 ## Contrato funcional solicitado

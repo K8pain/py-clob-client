@@ -61,15 +61,20 @@ class PublicGammaClient:
                 logger.debug("gamma.fetch page=%s offset=%s empty_page=true", page, offset)
                 break
 
-            page_btc_5m = [item for item in page_markets if _is_bitcoin_5m_market(item, self.family_slug_prefix)]
+            page_active_tradeable = [
+                item
+                for item in page_markets
+                if _parse_bool(item.get("active"), default=True)
+                and not _parse_bool(item.get("closed"), default=False)
+            ]
             logger.debug(
-                "gamma.fetch page=%s offset=%s page_markets=%s btc_5m_markets=%s",
+                "gamma.fetch page=%s offset=%s page_markets=%s active_open_markets=%s",
                 page,
                 offset,
                 len(page_markets),
-                len(page_btc_5m),
+                len(page_active_tradeable),
             )
-            raw_markets.extend(page_btc_5m)
+            raw_markets.extend(page_active_tradeable)
             if len(page_markets) < self.page_limit:
                 logger.debug(
                     "gamma.fetch page=%s offset=%s reached_last_page=true page_markets=%s page_limit=%s",
@@ -92,8 +97,9 @@ class PublicGammaClient:
         records: list[MarketRecord] = []
         for item in raw_markets:
             record = _to_market_record(item)
-            if record is not None:
+            if record is not None and record.active and not record.closed:
                 records.append(record)
+        logger.debug("gamma.fetch records_normalized=%s", len(records))
         return records
 
     def _fetch_seed_event_markets(self) -> list[dict]:

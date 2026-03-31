@@ -88,14 +88,14 @@ class KorlicBot:
         logger.debug("cycle.discovery active_markets=%s", len(markets))
         operable_markets = sum(1 for market in markets if market.is_operable)
         crypto_markets = sum(1 for market in markets if self.classifier.is_crypto(market))
-        candidate_markets = 0
+        near_expiry_operable_markets = 0
         filter_stats: dict[str, int] = {
             "inactive": 0,
             "closed": 0,
             "not_accepting_orders": 0,
             "orderbook_disabled": 0,
             "non_crypto": 0,
-            "not_candidate_5m": 0,
+            "outside_watch_window": 0,
             "low_confidence": 0,
         }
         candidate_pool: list[ClassifiedMarket] = []
@@ -111,12 +111,13 @@ class KorlicBot:
             if not market.is_operable:
                 continue
             classified = self.classifier.classify(market)
-            if classified.status.value != "candidate_5m":
-                filter_stats["not_candidate_5m"] += 1
-            elif classified.confidence < self.classifier.min_confidence:
-                filter_stats["low_confidence"] += 1
+            seconds_to_end = self.time_sync.seconds_to(int(market.end_time.timestamp() * 1000))
+            if 0 < seconds_to_end <= self.config.watch_window_seconds:
+                near_expiry_operable_markets += 1
             else:
-                candidate_markets += 1
+                filter_stats["outside_watch_window"] += 1
+            if classified.status.value == "candidate_5m" and classified.confidence < self.classifier.min_confidence:
+                filter_stats["low_confidence"] += 1
             candidate_pool.append(
                 ClassifiedMarket(
                     market=market,
@@ -126,16 +127,17 @@ class KorlicBot:
                 )
             )
         logger.debug(
-            "cycle.discovery.filters operable=%s crypto=%s candidate_5m=%s inactive=%s closed=%s not_accepting_orders=%s orderbook_disabled=%s non_crypto=%s not_candidate_5m=%s low_confidence=%s",
+            "cycle.discovery.filters operable=%s crypto=%s near_expiry_operable=%s watch_window_seconds=%s inactive=%s closed=%s not_accepting_orders=%s orderbook_disabled=%s non_crypto=%s outside_watch_window=%s low_confidence=%s",
             operable_markets,
             crypto_markets,
-            candidate_markets,
+            near_expiry_operable_markets,
+            self.config.watch_window_seconds,
             filter_stats["inactive"],
             filter_stats["closed"],
             filter_stats["not_accepting_orders"],
             filter_stats["orderbook_disabled"],
             filter_stats["non_crypto"],
-            filter_stats["not_candidate_5m"],
+            filter_stats["outside_watch_window"],
             filter_stats["low_confidence"],
         )
         if operable_markets == 0:
@@ -162,6 +164,12 @@ class KorlicBot:
         token_ids = sorted({token for item in watchlist for token in item.market.token_ids})
         await self._ensure_subscription(token_ids)
         logger.debug("cycle.subscription token_ids=%s", len(token_ids))
+        orderbook_stats: dict[str, float] = {
+            "samples": 0,
+            "bid_levels": 0,
+            "ask_levels": 0,
+            "depth_at_entry": 0.0,
+        }
 
         for market in watchlist:
             if not market.market.accepting_orders or not market.market.active or market.market.closed:
@@ -195,6 +203,10 @@ class KorlicBot:
                     [(level.price, level.size) for level in book.asks[:3]],
                     book.ts_ms,
                 )
+                orderbook_stats["samples"] += 1
+                orderbook_stats["bid_levels"] += len(book.bids)
+                orderbook_stats["ask_levels"] += len(book.asks)
+                orderbook_stats["depth_at_entry"] += book.depth_at_or_better(self.signal_engine.config.entry_price)
                 signal, reason = self.signal_engine.evaluate(
                     market=market,
                     token_id=token_id,
@@ -346,6 +358,16 @@ class KorlicBot:
             orders=self.paper.open_orders,
             positions=self.paper.positions,
             dedupe=self.signal_engine.dedupe,
+        )
+        avg_bid_levels = orderbook_stats["bid_levels"] / orderbook_stats["samples"] if orderbook_stats["samples"] else 0.0
+        avg_ask_levels = orderbook_stats["ask_levels"] / orderbook_stats["samples"] if orderbook_stats["samples"] else 0.0
+        avg_depth_at_entry = orderbook_stats["depth_at_entry"] / orderbook_stats["samples"] if orderbook_stats["samples"] else 0.0
+        logger.debug(
+            "cycle.orderbook.summary samples=%s avg_bid_levels=%.2f avg_ask_levels=%.2f avg_depth_at_entry=%.4f",
+            int(orderbook_stats["samples"]),
+            avg_bid_levels,
+            avg_ask_levels,
+            avg_depth_at_entry,
         )
         logger.debug(
             "cycle.end run_id=%s cycle_number=%s open_orders=%s open_positions=%s cash_available=%.4f cash_reserved=%.4f",

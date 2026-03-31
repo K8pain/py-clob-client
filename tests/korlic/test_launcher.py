@@ -224,8 +224,10 @@ def test_parser_supports_tail_trades_command():
     assert args.follow is True
 
 
-def test_setup_logger_enables_debug_for_launcher_and_bot(tmp_path: Path):
+def test_setup_logger_enables_debug_for_launcher_bot_and_factory(tmp_path: Path):
     logger = _setup_logger(tmp_path / "launcher.log")
     bot_logger = logging.getLogger("korlic-bot")
+    factory_logger = logging.getLogger("korlic-factory")
     assert logger.level == logging.DEBUG
     assert bot_logger.level == logging.DEBUG
+    assert factory_logger.level == logging.DEBUG

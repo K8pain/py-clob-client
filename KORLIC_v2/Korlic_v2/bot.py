@@ -170,6 +170,11 @@ class KorlicBot:
             "ask_levels": 0,
             "depth_at_entry": 0.0,
         }
+        signal_stats: dict[str, int] = {
+            "evaluated": 0,
+            "triggered": 0,
+            "outside_entry_window": 0,
+        }
 
         for market in watchlist:
             if not market.market.accepting_orders or not market.market.active or market.market.closed:
@@ -216,14 +221,19 @@ class KorlicBot:
                     available_cash=self.ledger.cash_available,
                 )
                 seconds_to_end = self.time_sync.seconds_to(end_epoch_ms)
-                logger.debug(
-                    "cycle.signal market_id=%s token_id=%s seconds_to_end=%s signal=%s reason=%s",
-                    market.market.market_id,
-                    token_id,
-                    seconds_to_end,
-                    signal is not None,
-                    reason,
-                )
+                signal_stats["evaluated"] += 1
+                if signal is not None:
+                    signal_stats["triggered"] += 1
+                    logger.debug(
+                        "cycle.signal market_id=%s token_id=%s seconds_to_end=%s signal=%s reason=%s",
+                        market.market.market_id,
+                        token_id,
+                        seconds_to_end,
+                        True,
+                        reason,
+                    )
+                elif reason == "skipped_outside_entry_window":
+                    signal_stats["outside_entry_window"] += 1
                 self._log_decision(
                     market=market,
                     token_id=token_id,
@@ -368,6 +378,13 @@ class KorlicBot:
             avg_bid_levels,
             avg_ask_levels,
             avg_depth_at_entry,
+        )
+        logger.debug(
+            "cycle.signal.summary evaluated=%s triggered=%s trigger_rate=%.4f outside_entry_window=%s",
+            signal_stats["evaluated"],
+            signal_stats["triggered"],
+            (signal_stats["triggered"] / signal_stats["evaluated"]) if signal_stats["evaluated"] else 0.0,
+            signal_stats["outside_entry_window"],
         )
         logger.debug(
             "cycle.end run_id=%s cycle_number=%s open_orders=%s open_positions=%s cash_available=%.4f cash_reserved=%.4f",

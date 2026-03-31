@@ -30,7 +30,7 @@ class PublicGammaClient:
         self._rate_limiter = _IntervalRateLimiter(min_interval_seconds=self.min_interval_seconds)
 
     page_limit: int = 100
-    max_pages: int = 5
+    max_pages: int = 0
     seed_event_slug: str = "btc-updown-5m-1774854300"
     family_slug_prefix: str = "btc-updown-5m-"
 
@@ -47,7 +47,16 @@ class PublicGammaClient:
             raw_markets.extend(seed_markets)
             logger.debug("gamma.fetch seed_event_markets=%s slug=%s", len(seed_markets), self.seed_event_slug)
 
-        for page in range(1, self.max_pages + 1):
+        page = 1
+        while True:
+            if self.max_pages > 0 and page > self.max_pages:
+                logger.debug(
+                    "gamma.fetch reached_configured_page_cap=true pages=%s max_pages=%s offset=%s",
+                    pages_fetched,
+                    self.max_pages,
+                    offset,
+                )
+                break
             self._rate_limiter.wait_turn()
             params = {"active": "true", "closed": "false", "limit": str(self.page_limit), "offset": str(offset)}
             response = httpx.get(url, params=params, timeout=self.timeout_seconds)
@@ -85,13 +94,15 @@ class PublicGammaClient:
                 )
                 break
             offset += self.page_limit
+            page += 1
 
         logger.debug(
-            "gamma.fetch aggregated pages=%s markets=%s page_limit=%s max_pages=%s",
+            "gamma.fetch aggregated pages=%s markets=%s page_limit=%s max_pages=%s final_offset=%s",
             pages_fetched,
             len(raw_markets),
             self.page_limit,
             self.max_pages,
+            offset,
         )
 
         records: list[MarketRecord] = []
@@ -182,7 +193,7 @@ def build_bot(db_path: str) -> KorlicBot:
     gamma_min_interval = float(os.getenv("KORLIC_GAMMA_MIN_INTERVAL_SECONDS", "0.25"))
     clob_min_interval = float(os.getenv("KORLIC_CLOB_MIN_INTERVAL_SECONDS", "0.05"))
     gamma_page_limit = int(os.getenv("KORLIC_GAMMA_PAGE_LIMIT", "100"))
-    gamma_max_pages = int(os.getenv("KORLIC_GAMMA_MAX_PAGES", "5"))
+    gamma_max_pages = int(os.getenv("KORLIC_GAMMA_MAX_PAGES", "0"))
     gamma_seed_slug = os.getenv("KORLIC_GAMMA_SEED_EVENT_SLUG", "btc-updown-5m-1774854300")
     gamma_family_prefix = os.getenv("KORLIC_GAMMA_FAMILY_PREFIX", "btc-updown-5m-")
     return KorlicBot(

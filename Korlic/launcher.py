@@ -35,6 +35,12 @@ def _setup_logger(log_file: Path) -> logging.Logger:
     bot_logger.handlers.clear()
     bot_logger.addHandler(handler)
     bot_logger.propagate = False
+
+    factory_logger = logging.getLogger("korlic-factory")
+    factory_logger.setLevel(logging.DEBUG)
+    factory_logger.handlers.clear()
+    factory_logger.addHandler(handler)
+    factory_logger.propagate = False
     return logger
 
 

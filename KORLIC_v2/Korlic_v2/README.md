@@ -57,7 +57,7 @@
 - Añadir métricas/alertas si se despliega 24/7.
 
 ## 7) Contexto amplio
-- Estado actual: `Korlic.factory:build_bot` ya conecta adapters REST públicos de Gamma + CLOB para discovery y orderbook.
+- Estado actual: `Korlic_v2.factory:build_bot` ya conecta adapters REST públicos de Gamma + CLOB para discovery y orderbook.
 - No requiere API privada para paper mode (no publica órdenes reales).
 - La capa WS sigue como stub saludable por defecto.
 - Extensión futura: ejecución live enchufable sin tocar discovery/watch/signal/persistence.
@@ -74,35 +74,35 @@
   - `KORLIC_CLOB_MIN_INTERVAL_SECONDS` (default `0.05`, ~20 req/s)
 
 ## 8) Orquestador CLI (operación por terminal/SSH)
-Se añadió `Korlic/launcher.py` para operar Korlic desde CLI de forma conveniente.
+Se añadió `Korlic_v2/launcher.py` para operar Korlic desde CLI de forma conveniente.
 
 ### Comandos
 ```bash
 # ver ayuda operativa
-python -m Korlic.launcher specs
+python -m Korlic_v2.launcher specs
 
 # ejecutar 1 ciclo
-python -m Korlic.launcher run-once \
-  --factory Korlic.factory:build_bot \
+python -m Korlic_v2.launcher run-once \
+  --factory Korlic_v2.factory:build_bot \
   --db-path var/korlic/korlic.sqlite \
   --log-file var/korlic/korlic-launcher.log
 
 # ejecutar en loop continuo
-python -m Korlic.launcher run-loop \
-  --factory Korlic.factory:build_bot \
+python -m Korlic_v2.launcher run-loop \
+  --factory Korlic_v2.factory:build_bot \
   --interval-seconds 5
 
 # tail del log del launcher (equivalente a tail -f)
-python -m Korlic.launcher tail-log --follow
+python -m Korlic_v2.launcher tail-log --follow
 
 # consultar eventos persistidos en SQLite
-python -m Korlic.launcher events --limit 30
+python -m Korlic_v2.launcher events --limit 30
 
 # filtrar por tipo de evento
-python -m Korlic.launcher events --event-type SIGNAL_DETECTED --limit 50
+python -m Korlic_v2.launcher events --event-type SIGNAL_DETECTED --limit 50
 
 # exportar reportes CSV
-python -m Korlic.launcher export-reports --output-dir var/korlic/reports
+python -m Korlic_v2.launcher export-reports --output-dir var/korlic/reports
 ```
 
 ### Contrato del factory
@@ -110,9 +110,9 @@ El launcher espera un `factory` en formato `modulo:funcion` que retorne `KorlicB
 Ejemplo:
 
 ```python
-# Korlic/factory.py
-from Korlic.bot import KorlicBot
-from Korlic.storage import KorlicStorage
+# Korlic_v2/factory.py
+from Korlic_v2.bot import KorlicBot
+from Korlic_v2.storage import KorlicStorage
 
 
 def build_bot(db_path: str) -> KorlicBot:

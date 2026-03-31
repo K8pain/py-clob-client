@@ -29,24 +29,60 @@ class PublicGammaClient:
     def __post_init__(self) -> None:
         self._rate_limiter = _IntervalRateLimiter(min_interval_seconds=self.min_interval_seconds)
 
+    page_limit: int = 100
+    max_pages: int = 5
+
     async def get_active_markets(self) -> list[MarketRecord]:
         return await asyncio.to_thread(self._fetch_active_markets)
 
     def _fetch_active_markets(self) -> list[MarketRecord]:
-        self._rate_limiter.wait_turn()
         url = f"{self.base_url.rstrip('/')}/events"
-        params = {"active": "true", "closed": "false", "limit": "100", "offset": "0"}
-        response = httpx.get(url, params=params, timeout=self.timeout_seconds)
-        response.raise_for_status()
-        payload = response.json()
-        candidate = _extract_market_items(payload)
-        self._debug_payload_shape(payload, candidate, params)
-        raw_markets = _flatten_event_markets(candidate)
-        raw_markets = [item for item in raw_markets if _is_bitcoin_5m_market(item)]
-        logger.debug("gamma.fetch markets=%s params=%s", len(raw_markets), params)
+        offset = 0
+        pages_fetched = 0
+        raw_markets: list[dict] = []
 
-        if not isinstance(raw_markets, list):
-            return []
+        for page in range(1, self.max_pages + 1):
+            self._rate_limiter.wait_turn()
+            params = {"active": "true", "closed": "false", "limit": str(self.page_limit), "offset": str(offset)}
+            response = httpx.get(url, params=params, timeout=self.timeout_seconds)
+            response.raise_for_status()
+            payload = response.json()
+            candidate = _extract_market_items(payload)
+            self._debug_payload_shape(payload, candidate, params)
+            page_markets = _flatten_event_markets(candidate)
+            pages_fetched += 1
+            if not page_markets:
+                logger.debug("gamma.fetch page=%s offset=%s empty_page=true", page, offset)
+                break
+
+            page_btc_5m = [item for item in page_markets if _is_bitcoin_5m_market(item)]
+            logger.debug(
+                "gamma.fetch page=%s offset=%s page_markets=%s btc_5m_markets=%s",
+                page,
+                offset,
+                len(page_markets),
+                len(page_btc_5m),
+            )
+            raw_markets.extend(page_btc_5m)
+            if len(page_markets) < self.page_limit:
+                logger.debug(
+                    "gamma.fetch page=%s offset=%s reached_last_page=true page_markets=%s page_limit=%s",
+                    page,
+                    offset,
+                    len(page_markets),
+                    self.page_limit,
+                )
+                break
+            offset += self.page_limit
+
+        logger.debug(
+            "gamma.fetch aggregated pages=%s markets=%s page_limit=%s max_pages=%s",
+            pages_fetched,
+            len(raw_markets),
+            self.page_limit,
+            self.max_pages,
+        )
+
         records: list[MarketRecord] = []
         for item in raw_markets:
             record = _to_market_record(item)
@@ -122,8 +158,15 @@ def build_bot(db_path: str) -> KorlicBot:
     clob_host = os.getenv("KORLIC_CLOB_HOST", "https://clob.polymarket.com")
     gamma_min_interval = float(os.getenv("KORLIC_GAMMA_MIN_INTERVAL_SECONDS", "0.25"))
     clob_min_interval = float(os.getenv("KORLIC_CLOB_MIN_INTERVAL_SECONDS", "0.05"))
+    gamma_page_limit = int(os.getenv("KORLIC_GAMMA_PAGE_LIMIT", "100"))
+    gamma_max_pages = int(os.getenv("KORLIC_GAMMA_MAX_PAGES", "5"))
     return KorlicBot(
-        gamma=PublicGammaClient(base_url=gamma_base_url, min_interval_seconds=gamma_min_interval),
+        gamma=PublicGammaClient(
+            base_url=gamma_base_url,
+            min_interval_seconds=gamma_min_interval,
+            page_limit=gamma_page_limit,
+            max_pages=gamma_max_pages,
+        ),
         clob=PublicClobClient(host=clob_host, min_interval_seconds=clob_min_interval),
         ws=EmptyWsClient(),
         storage=storage,

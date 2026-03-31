@@ -63,6 +63,7 @@ class KorlicBot:
     time_sync: TimeSync = field(default_factory=TimeSync)
     signal_engine: SignalEngine = field(default_factory=lambda: SignalEngine(SignalConfig()))
     ledger: Ledger = field(default_factory=lambda: Ledger(cash_available=1000.0))
+    cycle_number: int = 0
 
     def __post_init__(self) -> None:
         self.discovery = DiscoveryEngine(classifier=self.classifier, parser_version="korlic-v1")
@@ -70,8 +71,9 @@ class KorlicBot:
         self.universe = DiscoveryState(markets={}, parser_version="korlic-v1", discovered_at=datetime.utcnow().isoformat())
 
     async def run_cycle(self) -> None:
+        self.cycle_number += 1
         started = time.perf_counter()
-        logger.debug("cycle.start run_id=%s", self.run_id)
+        logger.debug("cycle.start run_id=%s cycle_number=%s", self.run_id, self.cycle_number)
         server_time = await self._retry(self.clob.get_server_time_ms, "degraded_clob_rest")
         if server_time is not None:
             self.time_sync.sync(server_time)
@@ -336,8 +338,9 @@ class KorlicBot:
             dedupe=self.signal_engine.dedupe,
         )
         logger.debug(
-            "cycle.end run_id=%s open_orders=%s open_positions=%s cash_available=%.4f cash_reserved=%.4f",
+            "cycle.end run_id=%s cycle_number=%s open_orders=%s open_positions=%s cash_available=%.4f cash_reserved=%.4f",
             self.run_id,
+            self.cycle_number,
             len(self.paper.open_orders),
             len(self.paper.positions),
             self.ledger.cash_available,

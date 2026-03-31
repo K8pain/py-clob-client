@@ -93,8 +93,12 @@ def _append_trade_log(db_path: Path, trade_log_file: Path, since_id: int = 0) ->
 
 async def _run_loop(bot: KorlicBot, logger: logging.Logger, interval_seconds: float) -> None:
     logger.info("loop started interval_seconds=%s", interval_seconds)
+    loop_iteration = 0
     while True:
+        loop_iteration += 1
+        logger.info("loop.iteration.start cycle=%s", loop_iteration)
         await _run_once(bot, logger)
+        logger.info("loop.iteration.sleep cycle=%s sleep_seconds=%s", loop_iteration, interval_seconds)
         await asyncio.sleep(interval_seconds)
 
 
@@ -107,9 +111,13 @@ async def _run_loop_with_trade_log(
 ) -> None:
     logger.info("loop started interval_seconds=%s trade_log_file=%s", interval_seconds, trade_log_file)
     last_id = 0
+    loop_iteration = 0
     while True:
+        loop_iteration += 1
+        logger.info("loop.iteration.start cycle=%s", loop_iteration)
         await _run_once(bot, logger)
         last_id = _append_trade_log(db_path, trade_log_file, since_id=last_id)
+        logger.info("loop.iteration.sleep cycle=%s sleep_seconds=%s", loop_iteration, interval_seconds)
         await asyncio.sleep(interval_seconds)
 
 

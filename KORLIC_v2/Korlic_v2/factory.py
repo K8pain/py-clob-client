@@ -31,6 +31,8 @@ class PublicGammaClient:
 
     page_limit: int = 100
     max_pages: int = 5
+    seed_event_slug: str = "btc-updown-5m-1774854300"
+    family_slug_prefix: str = "btc-updown-5m-"
 
     async def get_active_markets(self) -> list[MarketRecord]:
         return await asyncio.to_thread(self._fetch_active_markets)
@@ -40,6 +42,10 @@ class PublicGammaClient:
         offset = 0
         pages_fetched = 0
         raw_markets: list[dict] = []
+        seed_markets = self._fetch_seed_event_markets()
+        if seed_markets:
+            raw_markets.extend(seed_markets)
+            logger.debug("gamma.fetch seed_event_markets=%s slug=%s", len(seed_markets), self.seed_event_slug)
 
         for page in range(1, self.max_pages + 1):
             self._rate_limiter.wait_turn()
@@ -55,7 +61,7 @@ class PublicGammaClient:
                 logger.debug("gamma.fetch page=%s offset=%s empty_page=true", page, offset)
                 break
 
-            page_btc_5m = [item for item in page_markets if _is_bitcoin_5m_market(item)]
+            page_btc_5m = [item for item in page_markets if _is_bitcoin_5m_market(item, self.family_slug_prefix)]
             logger.debug(
                 "gamma.fetch page=%s offset=%s page_markets=%s btc_5m_markets=%s",
                 page,
@@ -89,6 +95,17 @@ class PublicGammaClient:
             if record is not None:
                 records.append(record)
         return records
+
+    def _fetch_seed_event_markets(self) -> list[dict]:
+        if not self.seed_event_slug:
+            return []
+        self._rate_limiter.wait_turn()
+        url = f"{self.base_url.rstrip('/')}/events/slug/{self.seed_event_slug}"
+        response = httpx.get(url, timeout=self.timeout_seconds)
+        response.raise_for_status()
+        payload = response.json()
+        items = _extract_market_items(payload)
+        return _flatten_event_markets(items)
 
     @staticmethod
     def _debug_payload_shape(payload: object, candidate: object, params: dict[str, str]) -> None:
@@ -160,12 +177,16 @@ def build_bot(db_path: str) -> KorlicBot:
     clob_min_interval = float(os.getenv("KORLIC_CLOB_MIN_INTERVAL_SECONDS", "0.05"))
     gamma_page_limit = int(os.getenv("KORLIC_GAMMA_PAGE_LIMIT", "100"))
     gamma_max_pages = int(os.getenv("KORLIC_GAMMA_MAX_PAGES", "5"))
+    gamma_seed_slug = os.getenv("KORLIC_GAMMA_SEED_EVENT_SLUG", "btc-updown-5m-1774854300")
+    gamma_family_prefix = os.getenv("KORLIC_GAMMA_FAMILY_PREFIX", "btc-updown-5m-")
     return KorlicBot(
         gamma=PublicGammaClient(
             base_url=gamma_base_url,
             min_interval_seconds=gamma_min_interval,
             page_limit=gamma_page_limit,
             max_pages=gamma_max_pages,
+            seed_event_slug=gamma_seed_slug,
+            family_slug_prefix=gamma_family_prefix,
         ),
         clob=PublicClobClient(host=clob_host, min_interval_seconds=clob_min_interval),
         ws=EmptyWsClient(),
@@ -285,13 +306,17 @@ def _flatten_event_markets(payload_items: object) -> list[dict]:
     return flat_markets
 
 
-def _is_bitcoin_5m_market(item: dict) -> bool:
+def _is_bitcoin_5m_market(item: dict, family_slug_prefix: str = "btc-updown-5m-") -> bool:
     text = " ".join(
         [
             str(item.get("question") or ""),
+            str(item.get("title") or ""),
             str(item.get("slug") or item.get("market_slug") or ""),
         ]
     ).lower()
+    slug = str(item.get("slug") or item.get("market_slug") or "").lower()
+    if family_slug_prefix and slug.startswith(family_slug_prefix.lower()):
+        return True
     has_bitcoin = "bitcoin" in text or "btc" in text
     has_5m = "5m" in text or "5 min" in text or "5min" in text
     return has_bitcoin and has_5m

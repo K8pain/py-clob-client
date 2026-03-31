@@ -11,6 +11,7 @@ from typing import Protocol
 
 from .discovery import DiscoveryEngine, DiscoveryState, MarketClassifier
 from .models import (
+    ClassificationStatus,
     ClassifiedMarket,
     Ledger,
     MarketRecord,
@@ -97,6 +98,7 @@ class KorlicBot:
             "not_candidate_5m": 0,
             "low_confidence": 0,
         }
+        candidate_pool: list[ClassifiedMarket] = []
         for market in markets:
             if not market.active:
                 filter_stats["inactive"] += 1
@@ -108,17 +110,21 @@ class KorlicBot:
                 filter_stats["orderbook_disabled"] += 1
             if not market.is_operable:
                 continue
-            if not self.classifier.is_crypto(market):
-                filter_stats["non_crypto"] += 1
-                continue
             classified = self.classifier.classify(market)
             if classified.status.value != "candidate_5m":
                 filter_stats["not_candidate_5m"] += 1
-                continue
-            if classified.confidence < self.classifier.min_confidence:
+            elif classified.confidence < self.classifier.min_confidence:
                 filter_stats["low_confidence"] += 1
-                continue
-            candidate_markets += 1
+            else:
+                candidate_markets += 1
+            candidate_pool.append(
+                ClassifiedMarket(
+                    market=market,
+                    status=classified.status if classified.status == ClassificationStatus.CANDIDATE_5M else ClassificationStatus.CANDIDATE_5M,
+                    confidence=classified.confidence if classified.confidence > 0 else 0.01,
+                    method=classified.method if classified.status == ClassificationStatus.CANDIDATE_5M else f"{classified.method}_forced_watch",
+                )
+            )
         logger.debug(
             "cycle.discovery.filters operable=%s crypto=%s candidate_5m=%s inactive=%s closed=%s not_accepting_orders=%s orderbook_disabled=%s non_crypto=%s not_candidate_5m=%s low_confidence=%s",
             operable_markets,
@@ -145,7 +151,11 @@ class KorlicBot:
                 for market in markets[:5]
             ]
             logger.debug("cycle.discovery.no_operable sample=%s", sample)
-        fresh = self.discovery.build_universe(markets)
+        fresh = DiscoveryState(
+            markets={item.market.market_id: item for item in candidate_pool},
+            parser_version=self.discovery.parser_version,
+            discovered_at=datetime.now(timezone.utc).isoformat(),
+        )
         self.universe = self.discovery.refresh_universe(self.universe, fresh)
         watchlist = self._build_watchlist(list(self.universe.markets.values()))
         logger.debug("cycle.watchlist near_expiry_markets=%s", len(watchlist))

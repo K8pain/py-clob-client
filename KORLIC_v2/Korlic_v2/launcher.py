@@ -236,6 +236,17 @@ def _run_all(args: argparse.Namespace) -> int:
 
     if args.factory:
         bot = _load_bot(args.factory, db_path)
+        if args.keep_running:
+            asyncio.run(
+                _run_loop_with_trade_log(
+                    bot=bot,
+                    logger=logger,
+                    db_path=db_path,
+                    trade_log_file=Path(args.trades_log_file),
+                    interval_seconds=args.interval_seconds,
+                )
+            )
+            return 0
         asyncio.run(_run_once(bot, logger))
 
     storage = KorlicStorage(args.db_path)
@@ -253,16 +264,6 @@ def _run_all(args: argparse.Namespace) -> int:
     )
     _print_tail(log_file, lines=args.lines, title="launcher-log tail")
     _print_tail(Path(files["pseudo_trades"]), lines=args.lines, title="pseudo_trades.csv tail")
-    if args.keep_running and args.factory:
-        asyncio.run(
-            _run_loop_with_trade_log(
-                bot=bot,
-                logger=logger,
-                db_path=db_path,
-                trade_log_file=Path(args.trades_log_file),
-                interval_seconds=args.interval_seconds,
-            )
-        )
     return 0
 
 

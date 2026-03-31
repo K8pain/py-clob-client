@@ -15,6 +15,7 @@ from py_clob_client.client import ClobClient
 
 from .bot import KorlicBot
 from .models import BookLevel, MarketRecord, OrderBookSnapshot
+from .signal import SignalConfig, SignalEngine
 from .storage import KorlicStorage
 
 logger = logging.getLogger("korlic-factory")
@@ -196,6 +197,11 @@ def build_bot(db_path: str) -> KorlicBot:
     gamma_max_pages = int(os.getenv("KORLIC_GAMMA_MAX_PAGES", "0"))
     gamma_seed_slug = os.getenv("KORLIC_GAMMA_SEED_EVENT_SLUG", "btc-updown-5m-1774854300")
     gamma_family_prefix = os.getenv("KORLIC_GAMMA_FAMILY_PREFIX", "btc-updown-5m-")
+    signal_entry_price = float(os.getenv("KORLIC_SIGNAL_ENTRY_PRICE", "0.60"))
+    signal_entry_seconds = int(os.getenv("KORLIC_SIGNAL_ENTRY_SECONDS", "600"))
+    signal_min_depth = float(os.getenv("KORLIC_SIGNAL_MIN_DEPTH", "10.0"))
+    signal_min_size = float(os.getenv("KORLIC_SIGNAL_MIN_SIZE", "5.0"))
+    signal_max_stake = float(os.getenv("KORLIC_SIGNAL_MAX_STAKE", "25.0"))
     return KorlicBot(
         gamma=PublicGammaClient(
             base_url=gamma_base_url,
@@ -208,6 +214,15 @@ def build_bot(db_path: str) -> KorlicBot:
         clob=PublicClobClient(host=clob_host, min_interval_seconds=clob_min_interval),
         ws=EmptyWsClient(),
         storage=storage,
+        signal_engine=SignalEngine(
+            SignalConfig(
+                entry_price=signal_entry_price,
+                entry_seconds_threshold=signal_entry_seconds,
+                min_operational_size=signal_min_depth,
+                min_order_size=signal_min_size,
+                max_stake_per_trade=signal_max_stake,
+            )
+        ),
     )
 
 

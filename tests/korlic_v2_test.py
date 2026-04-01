@@ -11,7 +11,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "KORLIC_v2"))
 
 from Korlic_v2.bot import KorlicBot
-from Korlic_v2.factory import PublicGammaClient
+from Korlic_v2.factory import PublicGammaClient, _extract_resolution
 from Korlic_v2.launcher import _run_all
 from Korlic_v2.models import BookLevel, ClassificationStatus, ClassifiedMarket, MarketRecord, OrderBookSnapshot
 from Korlic_v2.signal import SignalConfig, SignalEngine
@@ -130,6 +130,9 @@ class DummyClob:
 
     async def get_orderbook(self, token_id: str):
         return self.books[token_id]
+
+    async def get_market_resolution(self, market_id: str):
+        return (False, None)
 
 
 class DummyWs:
@@ -289,3 +292,17 @@ def test_signal_treats_60c_as_0_60_not_60():
     )
     assert signal_bad is None
     assert reason_bad == "skipped_price_above_entry_threshold"
+
+
+def test_extract_resolution_detects_winner_token():
+    resolved, winner = _extract_resolution(
+        {
+            "market_resolved": True,
+            "tokens": [
+                {"token_id": "yes", "winner": False},
+                {"token_id": "no", "winner": True},
+            ],
+        }
+    )
+    assert resolved is True
+    assert winner == "no"

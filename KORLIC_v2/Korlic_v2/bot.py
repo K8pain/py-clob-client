@@ -35,6 +35,8 @@ class ClobClient(Protocol):
 
     async def get_orderbook(self, token_id: str) -> OrderBookSnapshot: ...
 
+    async def get_market_resolution(self, market_id: str) -> tuple[bool, str | None]: ...
+
 
 class WsClient(Protocol):
     async def subscribe(self, asset_ids: list[str]) -> None: ...
@@ -363,6 +365,7 @@ class KorlicBot:
                         },
                     )
 
+        settled_count, settled_net_pnl = await self._settle_resolved_positions()
         self.storage.save_runtime_state(
             ledger=self.ledger,
             orders=self.paper.open_orders,
@@ -395,6 +398,12 @@ class KorlicBot:
             self.ledger.cash_available,
             self.ledger.cash_reserved,
         )
+        if settled_count > 0:
+            logger.debug(
+                "cycle.settlement.summary settled_positions=%s cycle_realized_net_pnl=%.4f",
+                settled_count,
+                settled_net_pnl,
+            )
 
     def _log_decision(
         self,
@@ -501,6 +510,39 @@ class KorlicBot:
             if 0 < seconds_to_end <= self.config.watch_window_seconds:
                 output.append(market)
         return output
+
+    async def _settle_resolved_positions(self) -> tuple[int, float]:
+        settled_count = 0
+        settled_net_pnl = 0.0
+        for market_id in list(self.paper.positions.keys()):
+            resolved, winner_token_id = await self._retry(
+                lambda m_id=market_id: self.clob.get_market_resolution(m_id),
+                "degraded_clob_rest",
+            ) or (False, None)
+            if not resolved:
+                continue
+            synthetic_market = ClassifiedMarket(
+                market=MarketRecord(
+                    market_id=market_id,
+                    event_id="",
+                    question="",
+                    slug="",
+                    token_ids=tuple(),
+                    end_time=datetime.now(timezone.utc),
+                    active=False,
+                    closed=True,
+                    accepting_orders=False,
+                    enable_order_book=False,
+                ),
+                status=ClassificationStatus.CANDIDATE_5M,
+                confidence=1.0,
+                method="resolution",
+            )
+            self.settle_position(synthetic_market, winner_token_id)
+            if self.paper.last_settlement_report is not None:
+                settled_count += 1
+                settled_net_pnl += self.paper.last_settlement_report.net_pnl
+        return settled_count, settled_net_pnl
 
     async def _ensure_subscription(self, token_ids: list[str]) -> None:
         if not token_ids:

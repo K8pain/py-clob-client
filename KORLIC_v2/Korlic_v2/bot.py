@@ -24,6 +24,7 @@ from .signal import SignalConfig, SignalEngine
 from .storage import KorlicStorage
 
 logger = logging.getLogger("korlic-bot")
+business_logger = logging.getLogger("korlic-business")
 
 
 class GammaClient(Protocol):
@@ -67,6 +68,7 @@ class KorlicBot:
     signal_engine: SignalEngine = field(default_factory=lambda: SignalEngine(SignalConfig()))
     ledger: Ledger = field(default_factory=lambda: Ledger(cash_available=1000.0))
     cycle_number: int = 0
+    last_logged_cumulative_realized_pnl: float | None = None
 
     def __post_init__(self) -> None:
         self.discovery = DiscoveryEngine(classifier=self.classifier, parser_version="korlic-v1")
@@ -429,6 +431,20 @@ class KorlicBot:
         cumulative_won = sum(1 for position in self.paper.positions.values() if position.status.value == "WON")
         cumulative_lost = sum(1 for position in self.paper.positions.values() if position.status.value == "LOST")
         cumulative_realized_pnl = sum((position.pnl_net or 0.0) for position in self.paper.positions.values())
+        if self.last_logged_cumulative_realized_pnl != cumulative_realized_pnl:
+            business_logger.info(
+                "business.pnl.update\n%s",
+                self._format_business_pnl_table(
+                    cycle=self.cycle_number,
+                    settled_this_cycle=settled_count,
+                    cumulative_won=cumulative_won,
+                    cumulative_lost=cumulative_lost,
+                    cumulative_realized_pnl=cumulative_realized_pnl,
+                    cash_available=self.ledger.cash_available,
+                    cash_reserved=self.ledger.cash_reserved,
+                ),
+            )
+            self.last_logged_cumulative_realized_pnl = cumulative_realized_pnl
         logger.debug(
             "cycle.trading.summary cycle=%s trades_taken=%s orders_opened=%s orders_filled=%s orders_partial=%s orders_expired=%s settled_this_cycle=%s cumulative_won=%s cumulative_lost=%s cumulative_realized_pnl=%.4f",
             self.cycle_number,
@@ -442,6 +458,31 @@ class KorlicBot:
             cumulative_lost,
             cumulative_realized_pnl,
         )
+
+    def _format_business_pnl_table(
+        self,
+        cycle: int,
+        settled_this_cycle: int,
+        cumulative_won: int,
+        cumulative_lost: int,
+        cumulative_realized_pnl: float,
+        cash_available: float,
+        cash_reserved: float,
+    ) -> str:
+        rows = [
+            ("cycle", str(cycle)),
+            ("settled_this_cycle", str(settled_this_cycle)),
+            ("cumulative_won", str(cumulative_won)),
+            ("cumulative_lost", str(cumulative_lost)),
+            ("cumulative_realized_pnl", f"{cumulative_realized_pnl:.4f}"),
+            ("cash_available", f"{cash_available:.4f}"),
+            ("cash_reserved", f"{cash_reserved:.4f}"),
+        ]
+        key_width = max(len(key) for key, _ in rows)
+        val_width = max(len(value) for _, value in rows)
+        border = f"+-{'-' * key_width}-+-{'-' * val_width}-+"
+        body = "\n".join(f"| {key:<{key_width}} | {value:>{val_width}} |" for key, value in rows)
+        return f"{border}\n{body}\n{border}"
 
     def _log_decision(
         self,

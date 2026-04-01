@@ -177,6 +177,11 @@ class PublicClobClient:
         asks = tuple(BookLevel(price=float(level.price), size=float(level.size)) for level in (ob.asks or []))
         return OrderBookSnapshot(token_id=token_id, bids=bids, asks=asks, ts_ms=await self.get_server_time_ms())
 
+    async def get_market_resolution(self, market_id: str) -> tuple[bool, str | None]:
+        self._rate_limiter.wait_turn()
+        payload = await asyncio.to_thread(self._client.get_market, market_id)
+        return _extract_resolution(payload)
+
 
 @dataclass
 class EmptyWsClient:
@@ -370,6 +375,23 @@ def _parse_token_ids_from_clob_ids(value: object) -> tuple[str, ...]:
         if isinstance(parsed, list):
             return tuple(str(v) for v in parsed if str(v).strip())
     return ()
+
+
+def _extract_resolution(payload: object) -> tuple[bool, str | None]:
+    if not isinstance(payload, dict):
+        return (False, None)
+    resolved = _parse_bool(payload.get("market_resolved"), default=False) or _parse_bool(payload.get("resolved"), default=False)
+    winner_token_id: str | None = None
+    for token in payload.get("tokens") or []:
+        if not isinstance(token, dict):
+            continue
+        is_winner = _parse_bool(token.get("winner"), default=False) or _parse_bool(token.get("is_winner"), default=False)
+        if is_winner:
+            winner_token_id = str(token.get("token_id") or token.get("tokenId") or token.get("id") or "")
+            winner_token_id = winner_token_id or None
+            resolved = True
+            break
+    return (resolved, winner_token_id)
 
 
 def _parse_epoch_value(value: int | float | str) -> int | None:

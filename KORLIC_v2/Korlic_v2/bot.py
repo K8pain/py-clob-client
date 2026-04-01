@@ -88,6 +88,16 @@ class KorlicBot:
             return
 
         logger.debug("cycle.discovery active_markets=%s", len(markets))
+        gamma_fetch_stats = getattr(self.gamma, "last_fetch_stats", None)
+        if isinstance(gamma_fetch_stats, dict) and gamma_fetch_stats:
+            logger.debug(
+                "cycle.discovery.pagination pages_fetched=%s markets_raw=%s page_limit=%s max_pages=%s final_offset=%s",
+                gamma_fetch_stats.get("pages_fetched", 0),
+                gamma_fetch_stats.get("markets_raw", 0),
+                gamma_fetch_stats.get("page_limit", 0),
+                gamma_fetch_stats.get("max_pages", 0),
+                gamma_fetch_stats.get("final_offset", 0),
+            )
         operable_markets = sum(1 for market in markets if market.is_operable)
         crypto_markets = sum(1 for market in markets if self.classifier.is_crypto(market))
         near_expiry_operable_markets = 0
@@ -177,6 +187,13 @@ class KorlicBot:
             "triggered": 0,
             "outside_entry_window": 0,
         }
+        execution_stats: dict[str, int] = {
+            "orders_opened": 0,
+            "orders_filled": 0,
+            "orders_partial": 0,
+            "orders_expired": 0,
+            "trades_taken": 0,
+        }
 
         for market in watchlist:
             if not market.market.accepting_orders or not market.market.active or market.market.closed:
@@ -198,16 +215,13 @@ class KorlicBot:
                 best_bid = max((b.price for b in book.bids), default=None)
                 best_ask = book.best_ask()
                 logger.debug(
-                    "cycle.orderbook market_id=%s token_id=%s best_bid=%s best_ask=%s bids=%s asks=%s depth_at_entry=%s top_bid_levels=%s top_ask_levels=%s ts_ms=%s",
+                    "cycle.orderbook market_id=%s best_bid=%s best_ask=%s bids=%s asks=%s depth_at_entry=%s ts_ms=%s",
                     market.market.market_id,
-                    token_id,
                     best_bid,
                     best_ask,
                     len(book.bids),
                     len(book.asks),
                     book.depth_at_or_better(self.signal_engine.config.entry_price),
-                    [(level.price, level.size) for level in book.bids[:3]],
-                    [(level.price, level.size) for level in book.asks[:3]],
                     book.ts_ms,
                 )
                 orderbook_stats["samples"] += 1
@@ -227,9 +241,9 @@ class KorlicBot:
                 if signal is not None:
                     signal_stats["triggered"] += 1
                     logger.debug(
-                        "cycle.signal market_id=%s token_id=%s seconds_to_end=%s signal=%s reason=%s",
+                        "cycle.signal market_id=%s market_slug=%s seconds_to_end=%s signal=%s reason=%s",
                         market.market.market_id,
-                        token_id,
+                        market.market.slug,
                         seconds_to_end,
                         True,
                         reason,
@@ -266,13 +280,15 @@ class KorlicBot:
                     )
                     continue
                 logger.debug(
-                    "cycle.order.open market_id=%s token_id=%s order_id=%s size=%s price=%s",
+                    "cycle.order.open market_id=%s market_slug=%s order_id=%s size=%s price=%s side=BUY outcome=YES",
                     market.market.market_id,
-                    token_id,
+                    market.market.slug,
                     order.paper_order_id,
                     order.requested_size,
                     order.limit_price,
                 )
+                execution_stats["orders_opened"] += 1
+                execution_stats["trades_taken"] += 1
                 self._log_decision(
                     market=market,
                     token_id=token_id,
@@ -296,14 +312,19 @@ class KorlicBot:
                 report = self.paper.last_fill_report
                 if filled > 0 and report is not None:
                     logger.debug(
-                        "cycle.order.fill market_id=%s token_id=%s order_id=%s fill_size=%s remaining=%s state=%s",
+                        "cycle.order.fill market_id=%s market_slug=%s order_id=%s fill_size=%s avg_fill_price=%s remaining=%s state=%s",
                         market.market.market_id,
-                        token_id,
+                        market.market.slug,
                         order.paper_order_id,
                         report.fill_size,
+                        report.average_fill_price,
                         report.remaining_size,
                         report.state,
                     )
+                    if report.state == "PSEUDO_ORDER_FILLED":
+                        execution_stats["orders_filled"] += 1
+                    else:
+                        execution_stats["orders_partial"] += 1
                     self._log_decision(
                         market=market,
                         token_id=token_id,
@@ -344,12 +365,13 @@ class KorlicBot:
                 if order.status.value == "OPEN" and seconds_to_end <= self.config.order_expiry_seconds:
                     self.paper.expire_order(order.paper_order_id, cancelled=False)
                     logger.debug(
-                        "cycle.order.expire market_id=%s token_id=%s order_id=%s unfilled=%s",
+                        "cycle.order.expire market_id=%s market_slug=%s order_id=%s unfilled=%s",
                         market.market.market_id,
-                        token_id,
+                        market.market.slug,
                         order.paper_order_id,
                         order.remaining,
                     )
+                    execution_stats["orders_expired"] += 1
                     self._log_decision(
                         market=market,
                         token_id=token_id,
@@ -404,6 +426,22 @@ class KorlicBot:
                 settled_count,
                 settled_net_pnl,
             )
+        cumulative_won = sum(1 for position in self.paper.positions.values() if position.status.value == "WON")
+        cumulative_lost = sum(1 for position in self.paper.positions.values() if position.status.value == "LOST")
+        cumulative_realized_pnl = sum((position.pnl_net or 0.0) for position in self.paper.positions.values())
+        logger.debug(
+            "cycle.trading.summary cycle=%s trades_taken=%s orders_opened=%s orders_filled=%s orders_partial=%s orders_expired=%s settled_this_cycle=%s cumulative_won=%s cumulative_lost=%s cumulative_realized_pnl=%.4f",
+            self.cycle_number,
+            execution_stats["trades_taken"],
+            execution_stats["orders_opened"],
+            execution_stats["orders_filled"],
+            execution_stats["orders_partial"],
+            execution_stats["orders_expired"],
+            settled_count,
+            cumulative_won,
+            cumulative_lost,
+            cumulative_realized_pnl,
+        )
 
     def _log_decision(
         self,

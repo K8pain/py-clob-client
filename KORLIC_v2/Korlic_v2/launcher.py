@@ -70,7 +70,7 @@ async def _run_once(bot: KorlicBot, logger: logging.Logger) -> None:
 
 def _append_trade_log(db_path: Path, trade_log_file: Path, since_id: int = 0) -> int:
     query = (
-        "SELECT id, ts_utc, event_type, decision, reason_code, market_id, token_id "
+        "SELECT id, ts_utc, event_type, decision, reason_code, market_id, payload "
         "FROM events WHERE id > ? AND event_type IN ("
         "'SIGNAL_DETECTED', 'NO_TRADE', "
         "'PSEUDO_ORDER_OPENED', 'PSEUDO_ORDER_PARTIAL_FILL', 'PSEUDO_ORDER_FILLED', 'PSEUDO_ORDER_EXPIRED', "
@@ -84,9 +84,13 @@ def _append_trade_log(db_path: Path, trade_log_file: Path, since_id: int = 0) ->
     trade_log_file.parent.mkdir(parents=True, exist_ok=True)
     with trade_log_file.open("a", encoding="utf-8") as fh:
         for row in rows:
+            payload = json.loads(row[6]) if row[6] else {}
+            event_payload = payload.get("payload", {}) if isinstance(payload, dict) else {}
             fh.write(
                 f"{row[1]} | {row[2]} | decision={row[3]} | reason={row[4]} | "
-                f"market_id={row[5]} | token_id={row[6]}\n"
+                f"market_id={row[5]} | market_slug={event_payload.get('market_slug', '')} | "
+                f"price={event_payload.get('limit_price', event_payload.get('average_fill_price', event_payload.get('signal_price', '')))} | "
+                f"size={event_payload.get('requested_size', event_payload.get('fill_size', ''))}\n"
             )
     return int(rows[-1][0])
 

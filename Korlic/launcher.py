@@ -175,8 +175,8 @@ def _query_events(db_path: Path, limit: int, event_type: str | None) -> list[dic
 def _query_trade_counters(db_path: Path) -> dict[str, object]:
     with sqlite3.connect(db_path) as conn:
         total, net_pnl = conn.execute("SELECT COUNT(*), COALESCE(SUM(net_pnl), 0) FROM pseudo_trades").fetchone()
-        wins = conn.execute("SELECT COUNT(*) FROM pseudo_trades WHERE result_class='WON'").fetchone()[0]
-        losses = conn.execute("SELECT COUNT(*) FROM pseudo_trades WHERE result_class='LOST'").fetchone()[0]
+        wins = conn.execute("SELECT COUNT(*) FROM pseudo_trades WHERE result_class IN ('WIN', 'WON')").fetchone()[0]
+        losses = conn.execute("SELECT COUNT(*) FROM pseudo_trades WHERE result_class IN ('LOSS', 'LOST')").fetchone()[0]
         pushes = conn.execute("SELECT COUNT(*) FROM pseudo_trades WHERE result_class='PUSH'").fetchone()[0]
     return {
         "total_trades": total,

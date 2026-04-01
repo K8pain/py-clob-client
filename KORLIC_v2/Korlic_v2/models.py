@@ -124,8 +124,8 @@ class Ledger:
     cash_reserved: float = 0.0
     holdings: dict[str, float] = field(default_factory=dict)
 
-    def reserve(self, amount: float) -> bool:
-        if amount > self.cash_available:
+    def reserve(self, amount: float, allow_negative: bool = False) -> bool:
+        if not allow_negative and amount > self.cash_available:
             return False
         self.cash_available -= amount
         self.cash_reserved += amount

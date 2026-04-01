@@ -13,7 +13,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "KORLIC_v2"))
 from Korlic_v2.bot import KorlicBot
 from Korlic_v2.factory import PublicGammaClient, _extract_resolution
 from Korlic_v2.launcher import _run_all
-from Korlic_v2.models import BookLevel, ClassificationStatus, ClassifiedMarket, MarketRecord, OrderBookSnapshot
+from Korlic_v2.models import BookLevel, ClassificationStatus, ClassifiedMarket, Ledger, MarketRecord, OrderBookSnapshot, SignalCandidate
+from Korlic_v2.paper import PaperExecutionEngine
 from Korlic_v2.signal import SignalConfig, SignalEngine
 from Korlic_v2.runtime import TimeSync
 from Korlic_v2.storage import KorlicStorage
@@ -292,6 +293,40 @@ def test_signal_treats_60c_as_0_60_not_60():
     )
     assert signal_bad is None
     assert reason_bad == "skipped_price_above_entry_threshold"
+
+
+def test_paper_engine_allows_negative_cash_for_simulation():
+    ledger = Ledger(cash_available=0.0)
+    paper = PaperExecutionEngine(ledger=ledger, allow_negative_cash=True)
+    order = paper.create_order(
+        SignalCandidate(
+            market_id="m-negative",
+            token_id="yes",
+            price=0.6,
+            size=10.0,
+            seconds_to_end=120,
+        )
+    )
+    assert order is not None
+    assert ledger.cash_available == -6.0
+
+
+def test_business_pnl_table_contains_aggregated_fields(tmp_path: Path):
+    storage = KorlicStorage(str(tmp_path / "korlic.sqlite"))
+    bot = KorlicBot(gamma=DummyGamma([]), clob=DummyClob({}), ws=DummyWs(), storage=storage)
+    table = bot._format_business_pnl_table(
+        cycle=7,
+        settled_this_cycle=2,
+        cumulative_won=5,
+        cumulative_lost=3,
+        cumulative_realized_pnl=-42.125,
+        cash_available=-10.0,
+        cash_reserved=15.0,
+    )
+    assert "cumulative_realized_pnl" in table
+    assert "-42.1250" in table
+    assert "cash_available" in table
+    assert "-10.0000" in table
 
 
 def test_extract_resolution_detects_winner_token():

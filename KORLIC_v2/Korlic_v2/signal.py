@@ -2,17 +2,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .config import (
+    DEFAULT_SIGNAL_ENTRY_PRICE,
+    DEFAULT_SIGNAL_ENTRY_SECONDS,
+    DEFAULT_SIGNAL_MAX_STAKE,
+    DEFAULT_SIGNAL_MIN_DEPTH,
+    DEFAULT_SIGNAL_MIN_SIZE,
+)
 from .models import ClassifiedMarket, OrderBookSnapshot, SignalCandidate
 from .runtime import TimeSync
 
 
 @dataclass
 class SignalConfig:
-    entry_price: float = 0.60
-    entry_seconds_threshold: int = 600
-    min_operational_size: float = 10.0
-    min_order_size: float = 5.0
-    max_stake_per_trade: float = 25.0
+    entry_price: float = DEFAULT_SIGNAL_ENTRY_PRICE
+    entry_seconds_threshold: int = DEFAULT_SIGNAL_ENTRY_SECONDS
+    min_operational_size: float = DEFAULT_SIGNAL_MIN_DEPTH
+    min_order_size: float = DEFAULT_SIGNAL_MIN_SIZE
+    max_stake_per_trade: float = DEFAULT_SIGNAL_MAX_STAKE
 
 
 @dataclass

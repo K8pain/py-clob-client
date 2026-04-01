@@ -20,6 +20,7 @@ from .models import (
 @dataclass
 class PaperExecutionEngine:
     ledger: Ledger
+    allow_negative_cash: bool = True
     open_orders: dict[str, PaperOrder] = field(default_factory=dict)
     positions: dict[str, PaperPosition] = field(default_factory=dict)
     last_fill_report: FillReport | None = None
@@ -27,7 +28,7 @@ class PaperExecutionEngine:
 
     def create_order(self, signal: SignalCandidate) -> PaperOrder | None:
         reserved = signal.price * signal.size
-        if not self.ledger.reserve(reserved):
+        if not self.ledger.reserve(reserved, allow_negative=self.allow_negative_cash):
             return None
 
         order = PaperOrder(

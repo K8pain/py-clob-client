@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import threading
 import time
@@ -34,6 +34,7 @@ class PublicGammaClient:
     max_pages: int = 0
     seed_event_slug: str = "btc-updown-5m-1774854300"
     family_slug_prefix: str = "btc-updown-5m-"
+    last_fetch_stats: dict[str, int | bool] = field(default_factory=dict)
 
     async def get_active_markets(self) -> list[MarketRecord]:
         return await asyncio.to_thread(self._fetch_active_markets)
@@ -60,6 +61,7 @@ class PublicGammaClient:
                 break
             self._rate_limiter.wait_turn()
             params = {"active": "true", "closed": "false", "limit": str(self.page_limit), "offset": str(offset)}
+            logger.debug("gamma.fetch.page_request page=%s offset=%s limit=%s", page, offset, self.page_limit)
             response = httpx.get(url, params=params, timeout=self.timeout_seconds)
             response.raise_for_status()
             payload = response.json()
@@ -105,6 +107,13 @@ class PublicGammaClient:
             self.max_pages,
             offset,
         )
+        self.last_fetch_stats = {
+            "pages_fetched": pages_fetched,
+            "markets_raw": len(raw_markets),
+            "final_offset": offset,
+            "page_limit": self.page_limit,
+            "max_pages": self.max_pages,
+        }
 
         records: list[MarketRecord] = []
         for item in raw_markets:

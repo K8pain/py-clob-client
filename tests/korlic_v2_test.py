@@ -26,7 +26,7 @@ def test_run_all_keep_running_skips_run_once(monkeypatch, tmp_path: Path):
     class DummyBot:
         pass
 
-    monkeypatch.setattr("Korlic_v2.launcher._setup_logger", lambda *_: object())
+    monkeypatch.setattr("Korlic_v2.launcher._setup_logger", lambda *_, **__: object())
     monkeypatch.setattr("Korlic_v2.launcher._load_bot", lambda *_, **__: DummyBot())
 
     async def fake_run_once(*_, **__):
@@ -47,12 +47,62 @@ def test_run_all_keep_running_skips_run_once(monkeypatch, tmp_path: Path):
         factory="Korlic_v2.factory:build_bot",
         trades_log_file=str(tmp_path / "trades.log"),
         interval_seconds=60.0,
+        aggregate_log_file=str(tmp_path / "cycle_aggregates.jsonl"),
+        log_level="INFO",
     )
 
     rc = _run_all(args)
     assert rc == 0
     assert called["run_once"] == 0
     assert called["loop"] == 1
+
+
+def test_setup_logger_accepts_info_level_and_wires_business_logger(tmp_path: Path):
+    from Korlic_v2.launcher import _setup_logger
+
+    logger = _setup_logger(tmp_path / "launcher.log", log_level="INFO")
+    assert logger.level == 20
+    assert logger.name == "korlic-launcher"
+
+
+def test_append_cycle_aggregate_log_writes_json_line(tmp_path: Path):
+    from Korlic_v2.launcher import _append_cycle_aggregate_log
+
+    db_path = tmp_path / "korlic.sqlite"
+    storage = KorlicStorage(str(db_path))
+    storage.save_pseudo_trade(
+        {
+            "pseudo_trade_id": "pt1",
+            "pseudo_order_id": "po1",
+            "run_id": "r1",
+            "strategy_version": "korlic-v1",
+            "market_id": "m1",
+            "token_id": "t1",
+            "side": "BUY",
+            "outcome": "YES",
+            "signal_timestamp_utc": "2026-01-01T00:00:00+00:00",
+            "fill_timestamp_utc": "2026-01-01T00:00:01+00:00",
+            "settlement_timestamp_utc": "2026-01-01T00:05:00+00:00",
+            "seconds_to_end_at_signal": 300,
+            "signal_price": 0.99,
+            "average_fill_price": 0.99,
+            "requested_size": 10.0,
+            "filled_size": 10.0,
+            "gross_stake": 9.9,
+            "gross_payoff": 10.0,
+            "net_pnl": 0.1,
+            "roi_percent": 1.0,
+            "result_class": "WON",
+            "trade_duration_seconds": 300,
+            "partial_fill": 0,
+        }
+    )
+    aggregate_file = tmp_path / "cycle_aggregates.jsonl"
+    _append_cycle_aggregate_log(db_path, aggregate_file, cycle_number=3, run_id="run-x")
+    payload = aggregate_file.read_text(encoding="utf-8").strip()
+    data = __import__("json").loads(payload)
+    assert data["cycle_number"] == 3
+    assert data["trades"]["total_trades"] == 1
 
 
 def test_public_gamma_client_paginates_and_keeps_non_btc_active_open(monkeypatch):

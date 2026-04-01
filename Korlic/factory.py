@@ -40,14 +40,17 @@ class PublicGammaClient:
         self._rate_limiter.wait_turn()
         url = f"{self.base_url.rstrip('/')}/events"
         raw_markets: list[dict] = []
+        request_started = time.perf_counter()
         seed_markets = self._fetch_seed_event_markets()
         if seed_markets:
             raw_markets.extend(seed_markets)
-            logger.debug("gamma.fetch seed_event_markets=%s slug=%s", len(seed_markets), self.seed_event_slug)
+            logger.debug("gamma.fetch.seed slug=%s markets=%s", self.seed_event_slug, len(seed_markets))
         offset = 0
         pages_fetched = 0
+        total_page_markets = 0
         for page in range(self.max_pages):
             params = {"active": "true", "closed": "false", "limit": str(self.page_limit), "offset": str(offset)}
+            page_started = time.perf_counter()
             response = httpx.get(url, params=params, timeout=self.timeout_seconds)
             response.raise_for_status()
             payload = response.json()
@@ -56,21 +59,26 @@ class PublicGammaClient:
             page_markets = _flatten_event_markets(candidate)
             pages_fetched += 1
             if not page_markets:
-                logger.debug("gamma.fetch page=%s offset=%s empty_page=true", page, offset)
+                logger.debug("gamma.fetch.page page=%s/%s offset=%s empty_page=true latency_ms=%s", page + 1, self.max_pages, offset, int((time.perf_counter() - page_started) * 1000))
                 break
             page_btc_5m = [item for item in page_markets if _is_bitcoin_5m_market(item, self.family_slug_prefix)]
+            total_page_markets += len(page_markets)
             logger.debug(
-                "gamma.fetch page=%s offset=%s page_markets=%s btc_5m_markets=%s",
-                page,
+                "gamma.fetch.page page=%s/%s offset=%s page_markets=%s btc_5m_markets=%s accumulated_filtered=%s latency_ms=%s",
+                page + 1,
+                self.max_pages,
                 offset,
                 len(page_markets),
                 len(page_btc_5m),
+                len(raw_markets) + len(page_btc_5m),
+                int((time.perf_counter() - page_started) * 1000),
             )
             raw_markets.extend(page_btc_5m)
             if len(page_markets) < self.page_limit:
                 logger.debug(
-                    "gamma.fetch page=%s offset=%s reached_last_page=true page_markets=%s page_limit=%s",
-                    page,
+                    "gamma.fetch.page page=%s/%s offset=%s reached_last_page=true page_markets=%s page_limit=%s",
+                    page + 1,
+                    self.max_pages,
                     offset,
                     len(page_markets),
                     self.page_limit,
@@ -79,11 +87,13 @@ class PublicGammaClient:
             offset += self.page_limit
 
         logger.debug(
-            "gamma.fetch aggregated pages=%s markets=%s page_limit=%s max_pages=%s",
+            "gamma.fetch.done pages=%s total_page_markets=%s filtered_markets=%s page_limit=%s max_pages=%s elapsed_ms=%s",
             pages_fetched,
+            total_page_markets,
             len(raw_markets),
             self.page_limit,
             self.max_pages,
+            int((time.perf_counter() - request_started) * 1000),
         )
         records: list[MarketRecord] = []
         for item in raw_markets:

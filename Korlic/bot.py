@@ -72,6 +72,15 @@ class KorlicBot:
     async def run_cycle(self) -> None:
         started = time.perf_counter()
         logger.debug("cycle.start run_id=%s", self.run_id)
+        cycle_metrics = {
+            "markets_evaluated": 0,
+            "orderbooks_checked": 0,
+            "signals_detected": 0,
+            "trades_taken": 0,
+            "orders_filled": 0,
+            "filled_size": 0.0,
+            "filled_notional": 0.0,
+        }
         server_time = await self._retry(self.clob.get_server_time_ms, "degraded_clob_rest")
         if server_time is not None:
             self.time_sync.sync(server_time)
@@ -162,25 +171,25 @@ class KorlicBot:
                 )
                 continue
             logger.debug("cycle.market.evaluate market_id=%s", market.market.market_id)
+            cycle_metrics["markets_evaluated"] += 1
             for token_id in market.market.token_ids:
                 end_epoch_ms = int(market.market.end_time.timestamp() * 1000)
                 book = await self._retry(lambda tid=token_id: self.clob.get_orderbook(tid), "degraded_clob_rest")
                 if book is None:
-                    logger.debug("cycle.token.skip market_id=%s token_id=%s reason=missing_orderbook", market.market.market_id, token_id)
+                    logger.debug("cycle.token.skip market_id=%s reason=missing_orderbook", market.market.market_id)
                     continue
+                cycle_metrics["orderbooks_checked"] += 1
                 best_bid = max((b.price for b in book.bids), default=None)
                 best_ask = book.best_ask()
                 logger.debug(
-                    "cycle.orderbook market_id=%s token_id=%s best_bid=%s best_ask=%s bids=%s asks=%s depth_at_entry=%s top_bid_levels=%s top_ask_levels=%s ts_ms=%s",
+                    "cycle.orderbook market_id=%s best_bid=%s best_ask=%s spread=%s bids=%s asks=%s depth_at_entry=%s ts_ms=%s",
                     market.market.market_id,
-                    token_id,
                     best_bid,
                     best_ask,
+                    (best_ask - best_bid) if isinstance(best_bid, (int, float)) and isinstance(best_ask, (int, float)) else None,
                     len(book.bids),
                     len(book.asks),
                     book.depth_at_or_better(self.signal_engine.config.entry_price),
-                    [(level.price, level.size) for level in book.bids[:3]],
-                    [(level.price, level.size) for level in book.asks[:3]],
                     book.ts_ms,
                 )
                 signal, reason = self.signal_engine.evaluate(
@@ -193,9 +202,8 @@ class KorlicBot:
                 )
                 seconds_to_end = self.time_sync.seconds_to(end_epoch_ms)
                 logger.debug(
-                    "cycle.signal market_id=%s token_id=%s seconds_to_end=%s signal=%s reason=%s",
+                    "cycle.signal market_id=%s seconds_to_end=%s signal=%s reason=%s",
                     market.market.market_id,
-                    token_id,
                     seconds_to_end,
                     signal is not None,
                     reason,
@@ -221,21 +229,23 @@ class KorlicBot:
                 )
                 if signal is None:
                     continue
+                cycle_metrics["signals_detected"] += 1
                 order = self.paper.create_order(signal)
                 if order is None:
                     logger.debug(
-                        "cycle.order.skip market_id=%s token_id=%s reason=paper_engine_rejected",
+                        "cycle.order.skip market_id=%s reason=paper_engine_rejected",
                         market.market.market_id,
-                        token_id,
                     )
                     continue
+                cycle_metrics["trades_taken"] += 1
                 logger.debug(
-                    "cycle.order.open market_id=%s token_id=%s order_id=%s size=%s price=%s",
+                    "cycle.trade.taken market_id=%s market_slug=%s side=BUY outcome=YES order_id=%s size=%s price=%s seconds_to_end=%s",
                     market.market.market_id,
-                    token_id,
+                    market.market.slug,
                     order.paper_order_id,
                     order.requested_size,
                     order.limit_price,
+                    seconds_to_end,
                 )
                 self._log_decision(
                     market=market,
@@ -260,14 +270,17 @@ class KorlicBot:
                 report = self.paper.last_fill_report
                 if filled > 0 and report is not None:
                     logger.debug(
-                        "cycle.order.fill market_id=%s token_id=%s order_id=%s fill_size=%s remaining=%s state=%s",
+                        "cycle.order.fill market_id=%s order_id=%s fill_size=%s remaining=%s average_fill_price=%s state=%s",
                         market.market.market_id,
-                        token_id,
                         order.paper_order_id,
                         report.fill_size,
                         report.remaining_size,
+                        report.average_fill_price,
                         report.state,
                     )
+                    cycle_metrics["orders_filled"] += 1
+                    cycle_metrics["filled_size"] += report.fill_size
+                    cycle_metrics["filled_notional"] += report.fill_size * report.average_fill_price
                     self._log_decision(
                         market=market,
                         token_id=token_id,
@@ -308,9 +321,8 @@ class KorlicBot:
                 if order.status.value == "OPEN" and seconds_to_end <= self.config.order_expiry_seconds:
                     self.paper.expire_order(order.paper_order_id, cancelled=False)
                     logger.debug(
-                        "cycle.order.expire market_id=%s token_id=%s order_id=%s unfilled=%s",
+                        "cycle.order.expire market_id=%s order_id=%s unfilled=%s",
                         market.market.market_id,
-                        token_id,
                         order.paper_order_id,
                         order.remaining,
                     )
@@ -335,13 +347,24 @@ class KorlicBot:
             positions=self.paper.positions,
             dedupe=self.signal_engine.dedupe,
         )
+        counters = self.storage.get_trade_counters()
         logger.debug(
-            "cycle.end run_id=%s open_orders=%s open_positions=%s cash_available=%.4f cash_reserved=%.4f",
+            "cycle.summary run_id=%s markets_evaluated=%s orderbooks_checked=%s signals=%s trades_taken=%s filled_orders=%s filled_size=%.4f filled_notional=%.4f open_orders=%s open_positions=%s cash_available=%.4f cash_reserved=%.4f cumulative_trades=%s cumulative_losses=%s cumulative_net_pnl=%.4f",
             self.run_id,
+            cycle_metrics["markets_evaluated"],
+            cycle_metrics["orderbooks_checked"],
+            cycle_metrics["signals_detected"],
+            cycle_metrics["trades_taken"],
+            cycle_metrics["orders_filled"],
+            cycle_metrics["filled_size"],
+            cycle_metrics["filled_notional"],
             len(self.paper.open_orders),
             len(self.paper.positions),
             self.ledger.cash_available,
             self.ledger.cash_reserved,
+            counters["total_trades"],
+            counters["losses"],
+            counters["net_pnl"],
         )
 
     def _log_decision(

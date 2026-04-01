@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import threading
@@ -14,6 +13,21 @@ import httpx
 from py_clob_client.client import ClobClient
 
 from .bot import KorlicBot
+from .config import (
+    KORLIC_CLOB_HOST,
+    KORLIC_CLOB_MIN_INTERVAL_SECONDS,
+    KORLIC_GAMMA_BASE_URL,
+    KORLIC_GAMMA_FAMILY_PREFIX,
+    KORLIC_GAMMA_MAX_PAGES,
+    KORLIC_GAMMA_MIN_INTERVAL_SECONDS,
+    KORLIC_GAMMA_PAGE_LIMIT,
+    KORLIC_GAMMA_SEED_EVENT_SLUG,
+    KORLIC_SIGNAL_ENTRY_PRICE,
+    KORLIC_SIGNAL_ENTRY_SECONDS,
+    KORLIC_SIGNAL_MAX_STAKE,
+    KORLIC_SIGNAL_MIN_DEPTH,
+    KORLIC_SIGNAL_MIN_SIZE,
+)
 from .models import BookLevel, MarketRecord, OrderBookSnapshot
 from .signal import SignalConfig, SignalEngine
 from .storage import KorlicStorage
@@ -203,38 +217,25 @@ class EmptyWsClient:
 
 def build_bot(db_path: str) -> KorlicBot:
     storage = KorlicStorage(db_path)
-    gamma_base_url = os.getenv("KORLIC_GAMMA_BASE_URL", "https://gamma-api.polymarket.com")
-    clob_host = os.getenv("KORLIC_CLOB_HOST", "https://clob.polymarket.com")
-    gamma_min_interval = float(os.getenv("KORLIC_GAMMA_MIN_INTERVAL_SECONDS", "0.25"))
-    clob_min_interval = float(os.getenv("KORLIC_CLOB_MIN_INTERVAL_SECONDS", "0.05"))
-    gamma_page_limit = int(os.getenv("KORLIC_GAMMA_PAGE_LIMIT", "100"))
-    gamma_max_pages = int(os.getenv("KORLIC_GAMMA_MAX_PAGES", "0"))
-    gamma_seed_slug = os.getenv("KORLIC_GAMMA_SEED_EVENT_SLUG", "btc-updown-5m-1774854300")
-    gamma_family_prefix = os.getenv("KORLIC_GAMMA_FAMILY_PREFIX", "btc-updown-5m-")
-    signal_entry_price = float(os.getenv("KORLIC_SIGNAL_ENTRY_PRICE", "0.60"))
-    signal_entry_seconds = int(os.getenv("KORLIC_SIGNAL_ENTRY_SECONDS", "600"))
-    signal_min_depth = float(os.getenv("KORLIC_SIGNAL_MIN_DEPTH", "10.0"))
-    signal_min_size = float(os.getenv("KORLIC_SIGNAL_MIN_SIZE", "5.0"))
-    signal_max_stake = float(os.getenv("KORLIC_SIGNAL_MAX_STAKE", "25.0"))
     return KorlicBot(
         gamma=PublicGammaClient(
-            base_url=gamma_base_url,
-            min_interval_seconds=gamma_min_interval,
-            page_limit=gamma_page_limit,
-            max_pages=gamma_max_pages,
-            seed_event_slug=gamma_seed_slug,
-            family_slug_prefix=gamma_family_prefix,
+            base_url=KORLIC_GAMMA_BASE_URL,
+            min_interval_seconds=KORLIC_GAMMA_MIN_INTERVAL_SECONDS,
+            page_limit=KORLIC_GAMMA_PAGE_LIMIT,
+            max_pages=KORLIC_GAMMA_MAX_PAGES,
+            seed_event_slug=KORLIC_GAMMA_SEED_EVENT_SLUG,
+            family_slug_prefix=KORLIC_GAMMA_FAMILY_PREFIX,
         ),
-        clob=PublicClobClient(host=clob_host, min_interval_seconds=clob_min_interval),
+        clob=PublicClobClient(host=KORLIC_CLOB_HOST, min_interval_seconds=KORLIC_CLOB_MIN_INTERVAL_SECONDS),
         ws=EmptyWsClient(),
         storage=storage,
         signal_engine=SignalEngine(
             SignalConfig(
-                entry_price=signal_entry_price,
-                entry_seconds_threshold=signal_entry_seconds,
-                min_operational_size=signal_min_depth,
-                min_order_size=signal_min_size,
-                max_stake_per_trade=signal_max_stake,
+                entry_price=KORLIC_SIGNAL_ENTRY_PRICE,
+                entry_seconds_threshold=KORLIC_SIGNAL_ENTRY_SECONDS,
+                min_operational_size=KORLIC_SIGNAL_MIN_DEPTH,
+                min_order_size=KORLIC_SIGNAL_MIN_SIZE,
+                max_stake_per_trade=KORLIC_SIGNAL_MAX_STAKE,
             )
         ),
     )

@@ -19,22 +19,34 @@ DEFAULT_DB_PATH = Path("var/korlic/korlic.sqlite")
 DEFAULT_LOG_PATH = Path("var/korlic/korlic-launcher.log")
 DEFAULT_TRADES_LOG_PATH = Path("var/korlic/korlic-trades.log")
 DEFAULT_REPORTS_PATH = Path("var/korlic/reports")
+DEFAULT_CYCLE_AGGREGATES_LOG_PATH = Path("var/korlic/reports/cycle_aggregates.jsonl")
 
 
-def _setup_logger(log_file: Path) -> logging.Logger:
+def _setup_logger(log_file: Path, log_level: str = "INFO") -> logging.Logger:
     log_file.parent.mkdir(parents=True, exist_ok=True)
+    level = getattr(logging, str(log_level).upper(), logging.INFO)
     logger = logging.getLogger("korlic-launcher")
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(level)
     logger.handlers.clear()
     handler = logging.FileHandler(log_file, encoding="utf-8")
     handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
     logger.addHandler(handler)
 
     bot_logger = logging.getLogger("korlic-bot")
-    bot_logger.setLevel(logging.DEBUG)
+    bot_logger.setLevel(level)
     bot_logger.handlers.clear()
     bot_logger.addHandler(handler)
     bot_logger.propagate = False
+    factory_logger = logging.getLogger("korlic-factory")
+    factory_logger.setLevel(level)
+    factory_logger.handlers.clear()
+    factory_logger.addHandler(handler)
+    factory_logger.propagate = False
+    biz_logger = logging.getLogger("korlic-business")
+    biz_logger.setLevel(level)
+    biz_logger.handlers.clear()
+    biz_logger.addHandler(handler)
+    biz_logger.propagate = False
     return logger
 
 
@@ -95,6 +107,24 @@ def _append_trade_log(db_path: Path, trade_log_file: Path, since_id: int = 0) ->
     return int(rows[-1][0])
 
 
+def _append_cycle_aggregate_log(
+    db_path: Path,
+    aggregate_log_file: Path,
+    cycle_number: int,
+    run_id: str,
+) -> None:
+    aggregate_log_file.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "run_id": run_id,
+        "cycle_number": cycle_number,
+        "trades": _query_trade_counters(db_path),
+        "diagnostics": _query_event_diagnostics(db_path),
+    }
+    with aggregate_log_file.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
 async def _run_loop(bot: KorlicBot, logger: logging.Logger, interval_seconds: float) -> None:
     logger.info("loop started interval_seconds=%s", interval_seconds)
     loop_iteration = 0
@@ -111,6 +141,8 @@ async def _run_loop_with_trade_log(
     logger: logging.Logger,
     db_path: Path,
     trade_log_file: Path,
+    aggregate_log_file: Path,
+    output_dir: Path,
     interval_seconds: float,
 ) -> None:
     logger.info("loop started interval_seconds=%s trade_log_file=%s", interval_seconds, trade_log_file)
@@ -121,6 +153,8 @@ async def _run_loop_with_trade_log(
         logger.info("loop.iteration.start cycle=%s", loop_iteration)
         await _run_once(bot, logger)
         last_id = _append_trade_log(db_path, trade_log_file, since_id=last_id)
+        _append_cycle_aggregate_log(db_path, aggregate_log_file, loop_iteration, bot.run_id)
+        bot.export_reports(str(output_dir))
         logger.info("loop.iteration.sleep cycle=%s sleep_seconds=%s", loop_iteration, interval_seconds)
         await asyncio.sleep(interval_seconds)
 
@@ -236,7 +270,7 @@ def _print_tail(path: Path, lines: int, title: str) -> None:
 def _run_all(args: argparse.Namespace) -> int:
     db_path = Path(args.db_path)
     log_file = Path(args.log_file)
-    logger = _setup_logger(log_file)
+    logger = _setup_logger(log_file, log_level=args.log_level)
 
     if args.factory:
         bot = _load_bot(args.factory, db_path)
@@ -247,11 +281,16 @@ def _run_all(args: argparse.Namespace) -> int:
                     logger=logger,
                     db_path=db_path,
                     trade_log_file=Path(args.trades_log_file),
+                    aggregate_log_file=Path(args.aggregate_log_file),
+                    output_dir=Path(args.output_dir),
                     interval_seconds=args.interval_seconds,
                 )
             )
             return 0
         asyncio.run(_run_once(bot, logger))
+        _append_trade_log(db_path, Path(args.trades_log_file))
+        _append_cycle_aggregate_log(db_path, Path(args.aggregate_log_file), 1, bot.run_id)
+        bot.export_reports(args.output_dir)
 
     storage = KorlicStorage(args.db_path)
     files = storage.export_csv_reports(args.output_dir)
@@ -304,6 +343,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--log-file", default=str(DEFAULT_LOG_PATH))
     parser.add_argument("--trades-log-file", default=str(DEFAULT_TRADES_LOG_PATH))
     parser.add_argument("--output-dir", default=str(DEFAULT_REPORTS_PATH))
+    parser.add_argument("--aggregate-log-file", default=str(DEFAULT_CYCLE_AGGREGATES_LOG_PATH))
+    parser.add_argument("--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"), default="INFO")
     parser.add_argument("--interval-seconds", type=float, default=5.0, help="Intervalo para modo continuo.")
     parser.add_argument("--keep-running", action="store_true", help="Con --all, no termina y sigue en loop.")
     parser.add_argument("-n", "--lines", type=int, default=30, help="Líneas para tail en --all.")
@@ -315,12 +356,19 @@ def _build_parser() -> argparse.ArgumentParser:
     run_once.add_argument("--factory", required=True, help="Factory 'modulo:funcion' que retorna KorlicBot.")
     run_once.add_argument("--db-path", default=str(DEFAULT_DB_PATH))
     run_once.add_argument("--log-file", default=str(DEFAULT_LOG_PATH))
+    run_once.add_argument("--trades-log-file", default=str(DEFAULT_TRADES_LOG_PATH))
+    run_once.add_argument("--output-dir", default=str(DEFAULT_REPORTS_PATH))
+    run_once.add_argument("--aggregate-log-file", default=str(DEFAULT_CYCLE_AGGREGATES_LOG_PATH))
+    run_once.add_argument("--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"), default="INFO")
 
     run_loop = sub.add_parser("run-loop", help="Ejecuta ciclos de Korlic en loop.")
     run_loop.add_argument("--factory", required=True, help="Factory 'modulo:funcion' que retorna KorlicBot.")
     run_loop.add_argument("--db-path", default=str(DEFAULT_DB_PATH))
     run_loop.add_argument("--log-file", default=str(DEFAULT_LOG_PATH))
     run_loop.add_argument("--trades-log-file", default=str(DEFAULT_TRADES_LOG_PATH))
+    run_loop.add_argument("--output-dir", default=str(DEFAULT_REPORTS_PATH))
+    run_loop.add_argument("--aggregate-log-file", default=str(DEFAULT_CYCLE_AGGREGATES_LOG_PATH))
+    run_loop.add_argument("--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"), default="INFO")
     run_loop.add_argument("--interval-seconds", type=float, default=5.0)
 
     tail_log = sub.add_parser("tail-log", help="Muestra log del launcher.")
@@ -377,12 +425,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     db_path = Path(args.db_path)
-    logger = _setup_logger(Path(args.log_file))
+    logger = _setup_logger(Path(args.log_file), log_level=args.log_level)
     bot = _load_bot(args.factory, db_path)
 
     if args.command == "run-once":
         asyncio.run(_run_once(bot, logger))
         _append_trade_log(db_path, Path(args.trades_log_file))
+        _append_cycle_aggregate_log(db_path, Path(args.aggregate_log_file), 1, bot.run_id)
+        bot.export_reports(args.output_dir)
         return 0
 
     asyncio.run(
@@ -391,6 +441,8 @@ def main(argv: list[str] | None = None) -> int:
             logger=logger,
             db_path=db_path,
             trade_log_file=Path(args.trades_log_file),
+            aggregate_log_file=Path(args.aggregate_log_file),
+            output_dir=Path(args.output_dir),
             interval_seconds=args.interval_seconds,
         )
     )

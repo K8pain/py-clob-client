@@ -276,6 +276,56 @@ def test_signal_uses_per_trade_budget_instead_of_full_cash():
     assert signal.size == 50.0
 
 
+def test_signal_ignores_available_cash_for_trade_counting_budget():
+    market = MarketRecord(
+        market_id="m-ignore-cash",
+        event_id="e-ignore-cash",
+        question="Ignore cash for budget",
+        slug="btc-updown-5m-ignore-cash",
+        token_ids=("yes", "no"),
+        end_time=datetime.now(timezone.utc) + timedelta(seconds=180),
+        active=True,
+        closed=False,
+        accepting_orders=True,
+        enable_order_book=True,
+    )
+    book = OrderBookSnapshot(
+        token_id="yes",
+        bids=(),
+        asks=(BookLevel(0.6, 1_000.0),),
+        ts_ms=int(datetime.now(timezone.utc).timestamp() * 1000),
+    )
+    engine = SignalEngine(
+        SignalConfig(
+            entry_price=0.6,
+            entry_seconds_threshold=600,
+            min_operational_size=10.0,
+            min_order_size=5.0,
+            max_stake_per_trade=30.0,
+        )
+    )
+    sync = TimeSync()
+    sync.sync(int(datetime.now(timezone.utc).timestamp() * 1000))
+
+    signal, reason = engine.evaluate(
+        market=ClassifiedMarket(
+            market=market,
+            status=ClassificationStatus.CANDIDATE_5M,
+            confidence=1.0,
+            method="test",
+        ),
+        token_id="yes",
+        book=book,
+        end_epoch_ms=int(market.end_time.timestamp() * 1000),
+        time_sync=sync,
+        available_cash=0.0,
+    )
+
+    assert reason == "signal_candidate"
+    assert signal is not None
+    assert signal.size == 50.0
+
+
 def test_signal_treats_60c_as_0_60_not_60():
     market = MarketRecord(
         market_id="m-price-units",

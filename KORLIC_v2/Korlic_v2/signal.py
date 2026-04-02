@@ -50,7 +50,7 @@ class SignalEngine:
         if normalized > self.config.entry_price:
             return None, "skipped_price_above_entry_threshold"
 
-        budget_for_trade = min(available_cash, self.config.max_stake_per_trade)
+        budget_for_trade = self.config.max_stake_per_trade
         size_by_cash = budget_for_trade / self.config.entry_price
         if size_by_cash < self.config.min_order_size:
             return None, "skipped_insufficient_funds"

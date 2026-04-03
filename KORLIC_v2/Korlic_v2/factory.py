@@ -14,7 +14,7 @@ import httpx
 
 from py_clob_client.client import ClobClient
 
-from .bot import KorlicBot
+from .bot import KorlicBot, KorlicConfig
 from .config import (
     KORLIC_CLOB_HOST,
     KORLIC_CLOB_MIN_INTERVAL_SECONDS,
@@ -24,6 +24,7 @@ from .config import (
     KORLIC_GAMMA_MIN_INTERVAL_SECONDS,
     KORLIC_GAMMA_PAGE_LIMIT,
     KORLIC_GAMMA_SEED_EVENT_SLUG,
+    KORLIC_MARKET_NEAR_EXPIRY_SECONDS,
     KORLIC_SIGNAL_ENTRY_PRICE,
     KORLIC_SIGNAL_ENTRY_SECONDS,
     KORLIC_SIGNAL_MAX_STAKE,
@@ -236,6 +237,7 @@ def build_bot(db_path: str) -> KorlicBot:
         clob=PublicClobClient(host=KORLIC_CLOB_HOST, min_interval_seconds=KORLIC_CLOB_MIN_INTERVAL_SECONDS),
         ws=EmptyWsClient(),
         storage=storage,
+        config=KorlicConfig(watch_window_seconds=KORLIC_MARKET_NEAR_EXPIRY_SECONDS),
         signal_engine=SignalEngine(
             SignalConfig(
                 entry_price=KORLIC_SIGNAL_ENTRY_PRICE,

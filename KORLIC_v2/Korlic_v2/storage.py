@@ -159,6 +159,20 @@ class KorlicStorage:
             return None
         return json.loads(row[0])
 
+    def trade_counters(self) -> dict[str, float | int]:
+        with self._connect() as conn:
+            total, net_pnl = conn.execute("SELECT COUNT(*), COALESCE(SUM(net_pnl), 0) FROM pseudo_trades").fetchone()
+            wins = conn.execute("SELECT COUNT(*) FROM pseudo_trades WHERE result_class IN ('WIN', 'WON')").fetchone()[0]
+            losses = conn.execute("SELECT COUNT(*) FROM pseudo_trades WHERE result_class IN ('LOSS', 'LOST')").fetchone()[0]
+            open_positions = conn.execute("SELECT COUNT(*) FROM pseudo_trades WHERE result_class='OPEN'").fetchone()[0]
+        return {
+            "total_trades": int(total),
+            "won_trades": int(wins),
+            "lost_trades": int(losses),
+            "open_trades": int(open_positions),
+            "net_pnl": float(net_pnl),
+        }
+
     def export_csv_reports(self, output_dir: str) -> dict[str, str]:
         # Exporta datasets listos para análisis operativo sin tocar SQLite manualmente.
         report_ts = datetime.now(timezone.utc).isoformat()

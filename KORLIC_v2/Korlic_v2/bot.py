@@ -19,6 +19,8 @@ from .models import (
     Ledger,
     MarketRecord,
     OrderBookSnapshot,
+    PaperOrder,
+    PaperPosition,
     PositionStatus,
     StructuredEvent,
 )
@@ -135,6 +137,7 @@ class KorlicBot:
                 near_expiry_operable_markets += 1
             else:
                 filter_stats["outside_watch_window"] += 1
+                continue
             if classified.status.value == "candidate_5m" and classified.confidence < self.classifier.min_confidence:
                 filter_stats["low_confidence"] += 1
             candidate_pool.append(
@@ -273,7 +276,6 @@ class KorlicBot:
                         "signal_price": self.signal_engine.config.entry_price,
                         "market_slug": market.market.slug,
                         "market_title": market.market.question,
-                        "outcome": "YES",
                         "side": "BUY",
                     },
                 )
@@ -289,9 +291,10 @@ class KorlicBot:
                     )
                     continue
                 logger.debug(
-                    "cycle.order.open market_id=%s market_slug=%s order_id=%s size=%s price=%s side=BUY outcome=YES",
+                    "cycle.order.open market_id=%s market_slug=%s token_id=%s order_id=%s size=%s price=%s side=BUY",
                     market.market.market_id,
                     market.market.slug,
+                    token_id,
                     order.paper_order_id,
                     order.requested_size,
                     order.limit_price,
@@ -313,7 +316,6 @@ class KorlicBot:
                         "order_open_timestamp_utc": order.opened_at_utc,
                         "rationale": "signal_candidate",
                         "side": "BUY",
-                        "outcome": "YES",
                     },
                 )
                 before = self.paper.positions.get(market.market.market_id)
@@ -361,7 +363,7 @@ class KorlicBot:
                             "market_id": market.market.market_id,
                             "token_id": token_id,
                             "side": "BUY",
-                            "outcome": "YES",
+                            "outcome": "OPEN",
                             "signal_timestamp_utc": datetime.now(timezone.utc).isoformat(),
                             "fill_timestamp_utc": order.closed_at_utc or datetime.now(timezone.utc).isoformat(),
                             "settlement_timestamp_utc": order.closed_at_utc or datetime.now(timezone.utc).isoformat(),
@@ -479,13 +481,14 @@ class KorlicBot:
                 settled_count,
                 settled_net_pnl,
             )
-        cumulative_won = sum(1 for position in self.paper.positions.values() if position.status.value == "WON")
-        cumulative_lost = sum(1 for position in self.paper.positions.values() if position.status.value == "LOST")
-        pending_positions = sum(1 for position in self.paper.positions.values() if position.status.value == "OPEN")
-        cumulative_trades = len(self.paper.positions)
+        counters = self.storage.trade_counters()
+        cumulative_won = int(counters["won_trades"])
+        cumulative_lost = int(counters["lost_trades"])
+        pending_positions = int(counters["open_trades"])
+        cumulative_trades = int(counters["total_trades"])
         markets_parsed = len(markets)
         markets_in_watchlist = len(watchlist)
-        cumulative_realized_pnl = sum((position.pnl_net or 0.0) for position in self.paper.positions.values())
+        cumulative_realized_pnl = float(counters["net_pnl"])
         business_logger.info(
             "business.pnl.update\n%s",
             self._format_business_pnl_table(
@@ -634,6 +637,16 @@ class KorlicBot:
         self.ledger.cash_available = ledger["cash_available"]
         self.ledger.cash_reserved = ledger["cash_reserved"]
         self.ledger.holdings = dict(ledger.get("holdings") or {})
+        self.paper.open_orders = {
+            order_id: PaperOrder(**payload)
+            for order_id, payload in (state.get("orders") or {}).items()
+            if isinstance(payload, dict)
+        }
+        self.paper.positions = {
+            market_id: PaperPosition(**payload)
+            for market_id, payload in (state.get("positions") or {}).items()
+            if isinstance(payload, dict)
+        }
         self.signal_engine.dedupe = set(state.get("dedupe") or [])
         return True
 
@@ -731,6 +744,8 @@ class KorlicBot:
     async def _settle_resolved_positions(self) -> tuple[int, float]:
         settled_count = 0
         settled_net_pnl = 0.0
+        now_ms = self.time_sync.now_ms()
+        known_end_times = {market_id: int(item.market.end_time.timestamp() * 1000) for market_id, item in self.universe.markets.items()}
         # Recorre únicamente posiciones no liquidadas para evitar llamadas innecesarias.
         pending_market_ids = [
             market_id
@@ -738,6 +753,9 @@ class KorlicBot:
             if position.status in {PositionStatus.OPEN, PositionStatus.PENDING_RESOLUTION}
         ]
         for market_id in pending_market_ids:
+            market_end_ms = known_end_times.get(market_id)
+            if market_end_ms is not None and now_ms < market_end_ms:
+                continue
             resolved, winner_token_id = await self._retry(
                 lambda m_id=market_id: self.clob.get_market_resolution(m_id),
                 "degraded_clob_rest",

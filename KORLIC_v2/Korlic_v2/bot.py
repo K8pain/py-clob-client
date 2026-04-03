@@ -19,6 +19,7 @@ from .models import (
     Ledger,
     MarketRecord,
     OrderBookSnapshot,
+    PositionStatus,
     StructuredEvent,
 )
 from .paper import PaperExecutionEngine
@@ -730,8 +731,13 @@ class KorlicBot:
     async def _settle_resolved_positions(self) -> tuple[int, float]:
         settled_count = 0
         settled_net_pnl = 0.0
-        # Recorre posiciones abiertas y liquida solo las que ya resolvieron en CLOB/Gamma.
-        for market_id in list(self.paper.positions.keys()):
+        # Recorre únicamente posiciones no liquidadas para evitar llamadas innecesarias.
+        pending_market_ids = [
+            market_id
+            for market_id, position in self.paper.positions.items()
+            if position.status in {PositionStatus.OPEN, PositionStatus.PENDING_RESOLUTION}
+        ]
+        for market_id in pending_market_ids:
             resolved, winner_token_id = await self._retry(
                 lambda m_id=market_id: self.clob.get_market_resolution(m_id),
                 "degraded_clob_rest",

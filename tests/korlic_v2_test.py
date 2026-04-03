@@ -448,3 +448,18 @@ def test_extract_resolution_detects_winner_token():
     )
     assert resolved is True
     assert winner == "no"
+
+
+def test_extract_resolution_detects_winner_from_outcome_prices():
+    resolved, winner = _extract_resolution(
+        {
+            "resolved": True,
+            "outcomePrices": "[1,0]",
+            "tokens": [
+                {"token_id": "yes"},
+                {"token_id": "no"},
+            ],
+        }
+    )
+    assert resolved is True
+    assert winner == "yes"

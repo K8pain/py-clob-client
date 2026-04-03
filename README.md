@@ -10,56 +10,45 @@ Python client for the Polymarket Central Limit Order Book (CLOB).
 
 - Arquitectura MVP del bot Polymarket (discovery, histórico, paper, backtester y real): `docs/polymarket_engine_mvp/README.md`.
 
-## Resumen rápido de APIs y endpoints de Polymarket
+## Resumen rápido de APIs y endpoints para **KORLIC**
 
 > Fuente oficial: https://docs.polymarket.com/api-reference/introduction
 
-### 1) Endpoints que **sí usamos** en este repo (py-clob-client)
+### 1) Qué usa hoy KORLIC (real, en código)
 
-| Dominio | Endpoint(s) | Qué enviamos (request) | Qué recibimos (response) | Cómo lo tratamos en el cliente |
+| Componente KORLIC | Endpoint | Parámetros que envía | Respuesta que recibe | Cómo lo trata KORLIC |
 |---|---|---|---|---|
-| Salud/tiempo | `/` , `/time` | Sin auth ni body | Estado OK y timestamp del servidor | Se usan para health-check y sincronización básica. |
-| Orderbook & pricing | `/book`, `/books`, `/price`, `/prices`, `/midpoint`, `/midpoints`, `/spread`, `/spreads`, `/last-trade-price`, `/last-trades-prices`, `/tick-size`, `/neg-risk`, `/fee-rate` | `token_id` (o lista de `token_ids`), `side` en precios puntuales | Precio, midpoint, spread, últimos trades, libro de órdenes, metadatos de ejecución (tick/fee/risk) | Se parsea a estructuras internas (por ejemplo `OrderBookSummary`) y se cachean `tick-size`, `neg-risk` y `fee-rate` para reducir llamadas repetidas. |
-| Órdenes (trading) | `/order`, `/orders`, `/data/order/{id}`, `/data/orders`, `/cancel-all`, `/cancel-market-orders`, `/order-scoring`, `/orders-scoring`, `/v1/heartbeats` | Payload firmado (L2) con orden(es), filtros para listar/cancelar, heartbeat de builder | Confirmación de alta/cancelación, estado de orden, listado paginado, estado de scoring | Se firma con headers L2; para crear órdenes se redondea precio/size según `tick-size` antes de enviar. |
-| Auth de CLOB | `/auth/api-key`, `/auth/derive-api-key`, `/auth/api-keys`, `/auth/readonly-*`, `/auth/ban-status/closed-only` | Firma L1/L2, nonce opcional | Credenciales API (`apiKey`, `secret`, `passphrase`) y estado de acceso | Flujo create-or-derive para credenciales; modo automático L0/L1/L2 según claves presentes. |
-| Trades & notificaciones | `/data/trades`, `/builder/trades`, `/notifications` | Filtros (mercado, usuario, cursor) y drop params para limpiar notifs | Trades paginados y notificaciones | Se maneja paginación por `next_cursor` hasta `END_CURSOR`. |
-| Mercados CLOB | `/markets`, `/markets/{condition_id}`, `/simplified-markets`, `/sampling-markets`, `/sampling-simplified-markets`, `/live-activity/events/{condition_id}` | `next_cursor`, `condition_id` | Catálogo de mercados (normal o simplificado) y actividad | Se usa para discovery rápido y para enriquecer decisiones de trading. |
-| Balance/allowance | `/balance-allowance`, `/balance-allowance/update` | Parámetros de activo/tipo de firma/funder | Balance y allowance vigentes + resultado de actualización | Se consulta/actualiza antes de operar para validar capacidad de ejecución. |
-| RFQ | `/rfq/request`, `/rfq/quote`, `/rfq/data/*`, `/rfq/config` | Requests/quotes firmados con montos (`assetIn/Out`, `amountIn/Out`) y filtros | Estado de requests/quotes, best quote, config RFQ | Se calcula monto según side (BUY/SELL), se redondea por tick-size y luego se firma L2. |
+| Gamma discovery (seed) | `GET /events/slug/{seed_event_slug}` | `seed_event_slug` | Evento con mercados asociados | Obtiene mercados iniciales de la familia (punto de arranque del discovery). |
+| Gamma discovery (paginado) | `GET /events` | `active=true`, `closed=false`, `limit`, `offset` | Lista paginada de eventos/markets | Recorre páginas, filtra activos/no cerrados y normaliza a `MarketRecord`. |
+| CLOB tiempo | `GET /time` | Sin body | Timestamp del servidor | Sincroniza `ts_ms`; si falla parseo, usa hora UTC local como fallback. |
+| CLOB microestructura | `GET /book?token_id=...` | `token_id` | Bids/asks del orderbook | Convierte niveles a `float` y construye `OrderBookSnapshot`. |
+| CLOB estado/resolución | `GET /markets/{condition_id}` | `condition_id` | Estado de mercado y campos de resolución | Extrae si el mercado ya resolvió y outcome ganador (si existe). |
 
-### 2) Otras APIs/endpoints que **no son el core actual** pero podrían servirnos
+### 2) Contrato request/response que KORLIC espera (resumido)
 
-> Polymarket separa 3 APIs principales: **Gamma** (discovery), **Data** (analytics/usuario), **CLOB** (orderbook + trading), más **Bridge/Relayer** y **WebSocket**.
-
-| API / Área | Endpoints útiles (ejemplos) | Parámetros típicos a enviar | Respuesta típica | Cuándo nos conviene |
-|---|---|---|---|---|
-| Gamma API (`gamma-api.polymarket.com`) | Events, Markets, Tags, Series, Comments, Search, Sports | `id`, `slug`, `tag`, `limit`, `offset`, filtros por estado/fecha | Objetos de mercado/evento + listas paginadas de metadata pública | Discovery avanzado, filtrado temático y features de exploración para seleccionar universo operable. |
-| Data API (`data-api.polymarket.com`) | Positions, User activity, Holders, Open interest, Leaderboards, Builder analytics | `user`, `market`, rango de fechas, `limit/cursor` | Métricas históricas, posiciones, actividad y rankings | Señales cuantitativas, scoring de mercados y análisis post-trade. |
-| CLOB extra (además de lo ya usado) | Price history, rebates, rewards endpoints | `token_id`/`market`, fechas, wallet, cursores | Series temporales de precio + datos de rebates/rewards | Optimización de ejecución y evaluación de rentabilidad neta (fees/rebates/rewards). |
-| Profile | Public profile, open/closed positions, activity, portfolio value, trades, snapshot CSV | `wallet`, filtros de fecha/mercado | Estado de cuenta y actividad detallada | Reporting, auditoría operativa y reconciliación. |
-| Bridge API (`bridge.polymarket.com`) | Supported assets, create deposit/withdraw address, quote, tx status | Asset/red, amount, address destino/origen | Rutas y estado de depósitos/retiros | Si automatizamos flujo de fondos (treasury / cash management). |
-| Relayer API | Submit tx, tx by id, recent txs, nonce, safe deployed, API keys | Payload de transacción, `user`, `nonce` | Estado de transacciones y metadatos de relayer | Operación avanzada con safes/proxies y control fino de envío onchain. |
-| WebSocket | Market channel, User channel, Sports channel | Suscripción por `market`/`asset`/usuario | Eventos en tiempo real (book, trades, user updates) | Estrategias low-latency, alertas y UIs en vivo. |
-
-### 3) Compendio mínimo de contratos de request/response (guía práctica)
-
-| Tipo de endpoint | Request: campos clave | Response: campos clave | Regla práctica de tratamiento |
+| Flujo | Request mínimo | Response mínima esperada | Tratamiento en KORLIC |
 |---|---|---|---|
-| Listados paginados | `limit`, `next_cursor`/`cursor`, filtros (`market`, `user`, `start/end`) | `data` (lista), `next_cursor` | Iterar hasta cursor final; deduplicar por `id`. |
-| Lookup por recurso | `id`, `slug`, `condition_id`, `token_id` | Objeto único de mercado/evento/orden | Validar `None`/404 y degradar sin romper pipeline. |
-| Pricing/orderbook | `token_id` (1 o N), `side` opcional | bid/ask, midpoint, spread, last price, niveles de libro | Normalizar floats/decimals y timestamp; cachear datos semiestables (tick/fee/risk). |
-| Trading autenticado | Firma L1/L2 + body firmado (`price`, `size`, `side`, `token_id`, tipo orden) | Ack de orden + `order_id`/estado/error | Firmar siempre contra `request_path` exacto y redondear a tick-size antes de enviar. |
-| Balance/riesgo | `asset_type`, `signature_type`, `funder` | balance, allowance, flags de riesgo/scoring | Chequear pre-trade y bloquear operación si no cumple límites. |
-| RFQ | request/quote con `assetIn/Out`, `amountIn/Out`, `userType` | `requestId`, `quoteId`, best quote, estado | Calcular montos por lado (BUY/SELL), firmar L2 y auditar ciclo request→quote→accept. |
+| Discovery de universo | `active`, `closed`, `limit`, `offset` | Items con `id`, `conditionId`, `slug`, `endDate*`, `clobTokenIds/tokens`, `active`, `closed` | Normaliza campos con variantes de nombre y descarta mercados inválidos o cerrados. |
+| Snapshot de book | `token_id` | `bids[]`, `asks[]` con `price`, `size` | Convierte a `BookLevel` y lo usa para señal/validación de profundidad. |
+| Estado del mercado | `condition_id` | Señales de resolución (`resolved/closed/outcome`) | Si está resuelto, evita nuevas acciones operativas para ese mercado. |
+| Tiempo servidor | (sin params) | `timestamp` (ms o parseable) | Usa server time; fallback defensivo a UTC local si formato no coincide. |
 
-### 4) Opciones concretas para ampliar el bot (prioridad sugerida)
+### 3) Qué **no** usa aún KORLIC, pero podría servirle
 
-1. **WebSocket market/user** para pasar de polling a streaming real-time.  
-2. **Data API (positions + activity + open interest)** para filtros y risk overlays basados en evidencia histórica.  
-3. **Rewards/Rebates** para optimizar ejecución neta (no solo precio bruto).  
-4. **Profile/accounting snapshot** para conciliación diaria automática.  
-5. **Bridge/Relayer** solo si vamos a automatizar treasury y operaciones de infraestructura wallet/safe.
+| API | Endpoints potenciales | Valor para KORLIC |
+|---|---|---|
+| CLOB WebSocket | market/user channels | Reemplazar polling por streaming para menor latencia. |
+| Data API | user activity, positions, open interest | Features cuantitativas para filtros/ranking de mercados. |
+| CLOB pricing extra | spreads/midpoints/last-trade-history | Mejorar señal de entrada/salida con microestructura adicional. |
+| Rewards/Rebates | endpoints de incentivos | Optimizar PnL neto (no solo precio de ejecución). |
+| Profile | posiciones/trades/snapshots | Conciliación y reporting operativo automático. |
 
+### 4) Prioridad sugerida (MVP KORLIC)
+
+1. **WebSocket market channel** para pasar de polling a eventos en vivo.  
+2. **Data API (open interest + activity)** para mejorar selección de mercados.  
+3. **Spreads/midpoints/last-trades** para enriquecer reglas de señal.  
+4. **Profile snapshots** para reconciliación diaria y observabilidad.
 
 ## Talic
 

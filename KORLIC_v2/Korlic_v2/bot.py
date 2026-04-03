@@ -1,3 +1,5 @@
+"""Orquestador principal del ciclo de mercado, señal y ejecución del bot."""
+
 from __future__ import annotations
 
 import asyncio
@@ -464,6 +466,15 @@ class KorlicBot:
                 cash_reserved=self.ledger.cash_reserved,
             ),
         )
+        business_logger.info(
+            "business.trade.lifecycle %s",
+            self._build_trade_lifecycle_snapshot(
+                settled_this_cycle=settled_count,
+                cumulative_won=cumulative_won,
+                cumulative_lost=cumulative_lost,
+                cumulative_realized_pnl=cumulative_realized_pnl,
+            ),
+        )
         self.last_logged_cumulative_realized_pnl = cumulative_realized_pnl
         logger.debug(
             "cycle.trading.summary cycle=%s trades_taken=%s orders_opened=%s orders_filled=%s orders_partial=%s orders_expired=%s settled_this_cycle=%s cumulative_won=%s cumulative_lost=%s cumulative_realized_pnl=%.4f",
@@ -503,6 +514,40 @@ class KorlicBot:
         border = f"+-{'-' * key_width}-+-{'-' * val_width}-+"
         body = "\n".join(f"| {key:<{key_width}} | {value:>{val_width}} |" for key, value in rows)
         return f"{border}\n{body}\n{border}"
+
+    def _build_trade_lifecycle_snapshot(
+        self,
+        settled_this_cycle: int,
+        cumulative_won: int,
+        cumulative_lost: int,
+        cumulative_realized_pnl: float,
+    ) -> str:
+        trades = []
+        for position in sorted(self.paper.positions.values(), key=lambda p: p.opened_at_utc):
+            settled = position.status.value in {"WON", "LOST"}
+            trades.append(
+                {
+                    "market_id": position.market_id,
+                    "token_id": position.token_id,
+                    "entered_at_utc": position.opened_at_utc,
+                    "entry_price": position.avg_price,
+                    "size": position.size,
+                    "status": position.status.value,
+                    "settled_at_utc": position.settled_at_utc if settled else None,
+                    "outcome": "WIN" if position.status.value == "WON" else ("LOSS" if position.status.value == "LOST" else None),
+                    "net_pnl": position.pnl_net if settled else None,
+                }
+            )
+        payload = {
+            "run_id": self.run_id,
+            "cycle": self.cycle_number,
+            "settled_this_cycle": settled_this_cycle,
+            "cumulative_won": cumulative_won,
+            "cumulative_lost": cumulative_lost,
+            "cumulative_realized_pnl": cumulative_realized_pnl,
+            "trades": trades,
+        }
+        return json.dumps(payload, separators=(",", ":"), sort_keys=False)
 
     def _log_decision(
         self,

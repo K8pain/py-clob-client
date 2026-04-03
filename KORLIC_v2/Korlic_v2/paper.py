@@ -1,3 +1,5 @@
+"""Motor de paper trading para simular órdenes y cierres de posición."""
+
 from __future__ import annotations
 
 import uuid

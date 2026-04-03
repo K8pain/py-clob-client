@@ -1,3 +1,5 @@
+"""Persistencia local de eventos, estado runtime y reportes CSV del bot."""
+
 from __future__ import annotations
 
 import json

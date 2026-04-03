@@ -400,7 +400,8 @@ def _extract_resolution(payload: object) -> tuple[bool, str | None]:
         return (False, None)
     resolved = _parse_bool(payload.get("market_resolved"), default=False) or _parse_bool(payload.get("resolved"), default=False)
     winner_token_id: str | None = None
-    for token in payload.get("tokens") or []:
+    tokens = payload.get("tokens") or []
+    for token in tokens:
         if not isinstance(token, dict):
             continue
         is_winner = _parse_bool(token.get("winner"), default=False) or _parse_bool(token.get("is_winner"), default=False)
@@ -409,7 +410,57 @@ def _extract_resolution(payload: object) -> tuple[bool, str | None]:
             winner_token_id = winner_token_id or None
             resolved = True
             break
+    if resolved and winner_token_id is None:
+        winner_token_id = _infer_winner_token_id(tokens=tokens, outcome_prices=payload.get("outcomePrices"))
     return (resolved, winner_token_id)
+
+
+def _infer_winner_token_id(tokens: list[object], outcome_prices: object) -> str | None:
+    if not isinstance(tokens, list):
+        return None
+    parsed_prices = _parse_outcome_prices(outcome_prices)
+    if not parsed_prices:
+        return None
+    for index, price in enumerate(parsed_prices):
+        if abs(price - 1.0) > 1e-9:
+            continue
+        if index >= len(tokens):
+            continue
+        token = tokens[index]
+        if not isinstance(token, dict):
+            continue
+        token_id = str(token.get("token_id") or token.get("tokenId") or token.get("id") or "").strip()
+        if token_id:
+            return token_id
+    return None
+
+
+def _parse_outcome_prices(value: object) -> list[float]:
+    if value is None:
+        return []
+    raw_values: list[object]
+    if isinstance(value, list):
+        raw_values = value
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(parsed, list):
+            return []
+        raw_values = parsed
+    else:
+        return []
+    parsed_prices: list[float] = []
+    for raw in raw_values:
+        try:
+            parsed_prices.append(float(raw))
+        except (TypeError, ValueError):
+            return []
+    return parsed_prices
 
 
 def _parse_epoch_value(value: int | float | str) -> int | None:

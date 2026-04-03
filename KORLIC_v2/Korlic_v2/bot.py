@@ -453,11 +453,22 @@ class KorlicBot:
             )
         cumulative_won = sum(1 for position in self.paper.positions.values() if position.status.value == "WON")
         cumulative_lost = sum(1 for position in self.paper.positions.values() if position.status.value == "LOST")
+        pending_positions = sum(1 for position in self.paper.positions.values() if position.status.value == "OPEN")
+        cumulative_trades = len(self.paper.positions)
+        markets_parsed = len(markets)
+        markets_in_watchlist = len(watchlist)
         cumulative_realized_pnl = sum((position.pnl_net or 0.0) for position in self.paper.positions.values())
         business_logger.info(
             "business.pnl.update\n%s",
             self._format_business_pnl_table(
                 cycle=self.cycle_number,
+                markets_parsed=markets_parsed,
+                markets_in_watchlist=markets_in_watchlist,
+                tokens_evaluated=signal_stats["evaluated"],
+                trades_taken_cycle=execution_stats["trades_taken"],
+                cumulative_trades=cumulative_trades,
+                pending_positions=pending_positions,
+                settled_total=(cumulative_won + cumulative_lost),
                 settled_this_cycle=settled_count,
                 cumulative_won=cumulative_won,
                 cumulative_lost=cumulative_lost,
@@ -466,7 +477,7 @@ class KorlicBot:
                 cash_reserved=self.ledger.cash_reserved,
             ),
         )
-        business_logger.info(
+        business_logger.debug(
             "business.trade.lifecycle %s",
             self._build_trade_lifecycle_snapshot(
                 settled_this_cycle=settled_count,
@@ -493,6 +504,13 @@ class KorlicBot:
     def _format_business_pnl_table(
         self,
         cycle: int,
+        markets_parsed: int,
+        markets_in_watchlist: int,
+        tokens_evaluated: int,
+        trades_taken_cycle: int,
+        cumulative_trades: int,
+        pending_positions: int,
+        settled_total: int,
         settled_this_cycle: int,
         cumulative_won: int,
         cumulative_lost: int,
@@ -502,6 +520,13 @@ class KorlicBot:
     ) -> str:
         rows = [
             ("cycle", str(cycle)),
+            ("markets_parsed", str(markets_parsed)),
+            ("markets_watchlist", str(markets_in_watchlist)),
+            ("tokens_evaluated", str(tokens_evaluated)),
+            ("trades_cycle", str(trades_taken_cycle)),
+            ("trades_total", str(cumulative_trades)),
+            ("positions_pending", str(pending_positions)),
+            ("positions_settled_total", str(settled_total)),
             ("settled_this_cycle", str(settled_this_cycle)),
             ("cumulative_won", str(cumulative_won)),
             ("cumulative_lost", str(cumulative_lost)),

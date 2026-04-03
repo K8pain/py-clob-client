@@ -299,6 +299,33 @@ class KorlicBot:
                             "reserved_cash": order.reserved_cash,
                         },
                     )
+                    self.storage.save_pseudo_trade(
+                        {
+                            "pseudo_trade_id": f"pt-{self.run_id[:8]}-{market.market.market_id}",
+                            "pseudo_order_id": f"po-{self.run_id[:8]}-{market.market.market_id}",
+                            "run_id": self.run_id,
+                            "strategy_version": self.config.strategy_version,
+                            "market_id": market.market.market_id,
+                            "token_id": token_id,
+                            "side": "BUY",
+                            "outcome": signal.outcome,
+                            "signal_timestamp_utc": signal.ts_utc,
+                            "fill_timestamp_utc": order.closed_at_utc or datetime.now(timezone.utc).isoformat(),
+                            "settlement_timestamp_utc": order.closed_at_utc or datetime.now(timezone.utc).isoformat(),
+                            "seconds_to_end_at_signal": signal.seconds_to_end,
+                            "signal_price": signal.price,
+                            "average_fill_price": report.average_fill_price,
+                            "requested_size": order.requested_size,
+                            "filled_size": order.filled_size,
+                            "gross_stake": order.filled_size * report.average_fill_price,
+                            "gross_payoff": 0.0,
+                            "net_pnl": 0.0,
+                            "roi_percent": 0.0,
+                            "result_class": "OPEN",
+                            "trade_duration_seconds": 0,
+                            "partial_fill": 1 if report.state == "PSEUDO_ORDER_PARTIAL_FILL" else 0,
+                        }
+                    )
                     after = self.paper.positions.get(market.market.market_id)
                     if after is not None:
                         self._log_decision(

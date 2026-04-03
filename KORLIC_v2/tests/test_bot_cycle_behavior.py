@@ -108,9 +108,9 @@ def test_run_cycle_emits_business_log_each_cycle(monkeypatch: pytest.MonkeyPatch
     asyncio.run(bot.run_cycle())
     asyncio.run(bot.run_cycle())
 
-    assert len(calls) == 4
+    assert len(calls) == 3
     assert any("business.pnl.update" in item for item in calls)
-    assert any("business.trade.lifecycle" in item for item in calls)
+    assert any("business.trade.entered" in item for item in calls)
 
 
 def test_run_cycle_can_open_orders_after_first_cycle() -> None:

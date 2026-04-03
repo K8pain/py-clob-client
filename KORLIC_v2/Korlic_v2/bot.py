@@ -370,6 +370,22 @@ class KorlicBot:
                                 "new_average_entry": after.avg_price,
                             },
                         )
+                        if before is None:
+                            business_logger.info(
+                                "business.trade.entered %s",
+                                json.dumps(
+                                    {
+                                        "run_id": self.run_id,
+                                        "cycle": self.cycle_number,
+                                        "market_id": after.market_id,
+                                        "token_id": after.token_id,
+                                        "entered_at_utc": after.opened_at_utc,
+                                        "entry_price": after.avg_price,
+                                        "size": after.size,
+                                    },
+                                    separators=(",", ":"),
+                                ),
+                            )
                 if order.status.value == "OPEN" and seconds_to_end <= self.config.order_expiry_seconds:
                     self.paper.expire_order(order.paper_order_id, cancelled=False)
                     logger.debug(
@@ -626,6 +642,26 @@ class KorlicBot:
                 "trade_duration_seconds": settlement.holding_duration_seconds,
                 "partial_fill": 1 if settlement.partial_fill else 0,
             }
+        )
+        business_logger.info(
+            "business.trade.outcome %s",
+            json.dumps(
+                {
+                    "run_id": self.run_id,
+                    "cycle": self.cycle_number,
+                    "market_id": position.market_id,
+                    "token_id": position.token_id,
+                    "entered_at_utc": position.opened_at_utc,
+                    "entry_price": position.avg_price,
+                    "size": position.size,
+                    "settlement_timestamp_utc": position.settled_at_utc,
+                    "outcome": settlement.outcome,
+                    "result_class": settlement.result_class,
+                    "net_pnl": settlement.net_pnl,
+                    "roi_percent": settlement.roi_percent,
+                },
+                separators=(",", ":"),
+            ),
         )
 
     def export_reports(self, output_dir: str) -> dict[str, str]:

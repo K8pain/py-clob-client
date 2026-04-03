@@ -11,7 +11,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "KORLIC_v2"))
 
 from Korlic_v2.bot import KorlicBot
-from Korlic_v2.factory import PublicGammaClient, _extract_resolution
+from Korlic_v2.factory import PublicGammaClient, _extract_market_status, _extract_resolution
 from Korlic_v2.launcher import _run_all
 from Korlic_v2.models import BookLevel, ClassificationStatus, ClassifiedMarket, Ledger, MarketRecord, OrderBookSnapshot, PaperPosition, SignalCandidate
 from Korlic_v2.paper import PaperExecutionEngine
@@ -473,6 +473,23 @@ def test_extract_resolution_detects_winner_token():
     )
     assert resolved is True
     assert winner == "no"
+
+
+def test_extract_market_status_reads_official_resolution_signals():
+    status = _extract_market_status(
+        {
+            "closed": True,
+            "closedTime": "2026-04-03T22:30:00Z",
+            "resolvedBy": "uma",
+            "umaResolutionStatus": "RESOLVED",
+            "market_resolved": False,
+        }
+    )
+    assert status["closed"] is True
+    assert status["resolved"] is False
+    assert status["closed_time"] == "2026-04-03T22:30:00Z"
+    assert status["resolved_by"] == "uma"
+    assert status["uma_resolution_status"] == "resolved"
 
 
 def test_extract_resolution_detects_winner_from_outcome_prices():

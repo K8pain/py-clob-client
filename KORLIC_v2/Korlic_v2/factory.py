@@ -212,6 +212,11 @@ class PublicClobClient:
         payload = await asyncio.to_thread(self._client.get_market, market_id)
         return _extract_resolution(payload)
 
+    async def get_market_status(self, market_id: str) -> dict[str, str | bool | None]:
+        self._rate_limiter.wait_turn()
+        payload = await asyncio.to_thread(self._client.get_market, market_id)
+        return _extract_market_status(payload)
+
 
 @dataclass
 class EmptyWsClient:
@@ -415,6 +420,18 @@ def _extract_resolution(payload: object) -> tuple[bool, str | None]:
     if resolved and winner_token_id is None:
         winner_token_id = _infer_winner_token_id(tokens=tokens, outcome_prices=payload.get("outcomePrices"))
     return (resolved, winner_token_id)
+
+
+def _extract_market_status(payload: object) -> dict[str, str | bool | None]:
+    if not isinstance(payload, dict):
+        return {}
+    return {
+        "closed": _parse_bool(payload.get("closed"), default=False),
+        "resolved": _parse_bool(payload.get("market_resolved"), default=False) or _parse_bool(payload.get("resolved"), default=False),
+        "closed_time": str(payload.get("closedTime") or payload.get("closed_time") or "") or None,
+        "resolved_by": str(payload.get("resolvedBy") or payload.get("resolved_by") or "") or None,
+        "uma_resolution_status": str(payload.get("umaResolutionStatus") or payload.get("uma_resolution_status") or "").strip().lower() or None,
+    }
 
 
 def _infer_winner_token_id(tokens: list[object], outcome_prices: object) -> str | None:

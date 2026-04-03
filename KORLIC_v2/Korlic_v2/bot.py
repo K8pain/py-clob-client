@@ -44,6 +44,8 @@ class ClobClient(Protocol):
 
     async def get_market_resolution(self, market_id: str) -> tuple[bool, str | None]: ...
 
+    async def get_market_status(self, market_id: str) -> dict[str, str | bool | None]: ...
+
 
 class WsClient(Protocol):
     async def subscribe(self, asset_ids: list[str]) -> None: ...
@@ -443,7 +445,7 @@ class KorlicBot:
                         },
                     )
 
-        settled_count, settled_net_pnl = await self._settle_resolved_positions()
+        settled_count, settled_net_pnl, pending_resolution_count, resolved_waiting_redeem_count = await self._settle_resolved_positions()
         # Persistencia al final de ciclo para permitir recuperación tras reinicios.
         self.storage.save_runtime_state(
             ledger=self.ledger,
@@ -508,6 +510,8 @@ class KorlicBot:
                 cumulative_lost=cumulative_lost,
                 cumulative_realized_pnl=cumulative_realized_pnl,
                 nearest_pending_expiration_utc=nearest_pending_expiration_utc,
+                pending_resolution_count=pending_resolution_count,
+                resolved_waiting_redeem_count=resolved_waiting_redeem_count,
                 cash_available=self.ledger.cash_available,
                 cash_reserved=self.ledger.cash_reserved,
             ),
@@ -553,6 +557,8 @@ class KorlicBot:
         nearest_pending_expiration_utc: str | None,
         cash_available: float,
         cash_reserved: float,
+        pending_resolution_count: int = 0,
+        resolved_waiting_redeem_count: int = 0,
     ) -> str:
         rows = [
             ("cycle", str(cycle)),
@@ -568,6 +574,8 @@ class KorlicBot:
             ("cumulative_lost", str(cumulative_lost)),
             ("cumulative_realized_pnl", f"{cumulative_realized_pnl:.4f}"),
             ("nearest_pending_expiration_utc", nearest_pending_expiration_utc or "n/a"),
+            ("pending_resolution_markets", str(pending_resolution_count)),
+            ("resolved_waiting_redeem", str(resolved_waiting_redeem_count)),
             ("cash_available", f"{cash_available:.4f}"),
             ("cash_reserved", f"{cash_reserved:.4f}"),
         ]
@@ -763,9 +771,11 @@ class KorlicBot:
                 nearest = expected_end
         return nearest.isoformat() if nearest is not None else None
 
-    async def _settle_resolved_positions(self) -> tuple[int, float]:
+    async def _settle_resolved_positions(self) -> tuple[int, float, int, int]:
         settled_count = 0
         settled_net_pnl = 0.0
+        pending_resolution_count = 0
+        resolved_waiting_redeem_count = 0
         now_ms = self.time_sync.now_ms()
         known_end_times = {market_id: int(item.market.end_time.timestamp() * 1000) for market_id, item in self.universe.markets.items()}
         # Recorre únicamente posiciones no liquidadas para evitar llamadas innecesarias.
@@ -784,6 +794,11 @@ class KorlicBot:
                     market_end_ms = None
             if market_end_ms is not None and now_ms < market_end_ms:
                 continue
+            market_status = await self._market_status(market_id)
+            if market_status.get("uma_resolution_status") in {"resolved", "settled"} or market_status.get("resolved"):
+                resolved_waiting_redeem_count += 1
+            elif market_status.get("closed"):
+                pending_resolution_count += 1
             resolved, winner_token_id = await self._retry(
                 lambda m_id=market_id: self.clob.get_market_resolution(m_id),
                 "degraded_clob_rest",
@@ -811,7 +826,16 @@ class KorlicBot:
             if self.paper.last_settlement_report is not None:
                 settled_count += 1
                 settled_net_pnl += self.paper.last_settlement_report.net_pnl
-        return settled_count, settled_net_pnl
+        return settled_count, settled_net_pnl, pending_resolution_count, resolved_waiting_redeem_count
+
+    async def _market_status(self, market_id: str) -> dict[str, str | bool | None]:
+        get_status = getattr(self.clob, "get_market_status", None)
+        if get_status is None:
+            return {}
+        status = await self._retry(lambda m_id=market_id: get_status(m_id), "degraded_clob_rest")
+        if isinstance(status, dict):
+            return status
+        return {}
 
     async def _ensure_subscription(self, token_ids: list[str]) -> None:
         if not token_ids:

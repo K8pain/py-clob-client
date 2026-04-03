@@ -10,6 +10,58 @@ Python client for the Polymarket Central Limit Order Book (CLOB).
 
 - Arquitectura MVP del bot Polymarket (discovery, histórico, paper, backtester y real): `docs/polymarket_engine_mvp/README.md`.
 
+## Resumen rápido de endpoints (qué usamos y qué más ofrece Polymarket)
+
+Referencia oficial: https://docs.polymarket.com/api-reference/introduction
+
+### 1) Endpoints que usamos en este repo (SDK + estrategias)
+
+> Objetivo: dejar claro **qué enviamos**, **qué recibimos** y **cómo lo tratamos** en el cliente.
+
+| Tipo | Endpoints (ejemplos) | Parámetros que enviamos | Respuesta que recibimos | Cómo lo tratamos en el código |
+|---|---|---|---|---|
+| Salud/tiempo | `GET /`, `GET /time` | Sin payload | Estado OK / timestamp del servidor | Uso directo para healthcheck y sincronía de reloj. |
+| Descubrimiento de mercados | `GET /simplified-markets`, `GET /markets`, `GET /markets/{id}` | `next_cursor`, filtros de mercado | Listas/paginación con metadata de mercados | Iteramos con cursor (`next_cursor`) y filtramos tokens elegibles para estrategia. |
+| Orderbook y precios | `GET /book`, `POST /books`, `GET /price(s)`, `GET /midpoint(s)`, `GET /spread(s)`, `GET /last-trade-price(s)` | `token_id` (o lista), `side` cuando aplica | Bids/asks, midpoint, spread, last trade, precios | Parseamos orderbook a `OrderBookSummary`; validamos hash; convertimos precios a `float` para señales. |
+| Trading (órdenes) | `POST /order`, `POST /orders`, `DELETE /order`, `DELETE /orders`, `DELETE /cancel-all`, `GET /data/orders`, `GET /data/order/{id}` | Payload firmado (L2): token, side, size, price/tipo orden | Confirmación de orden, estado, listas de órdenes | Construimos orden con `OrderBuilder`, redondeamos por tick size, enviamos JSON firmado. |
+| Trades | `GET /data/trades`, `GET /builder/trades` | Filtros (`market`, `asset_id`, `after`, `before`, `maker_address`, `next_cursor`) | Trades paginados | Armamos query params de forma incremental y consumimos por páginas. |
+| Cuenta y permisos | `GET /balance-allowance`, `POST /balance-allowance/update`, `GET /order-scoring`, `POST /v1/heartbeats` | Parámetros de asset/signature type, IDs de orden | Balance/allowance, flags de scoring, ack heartbeat | Se usa para validar capacidad de operar y mantener sesiones de market maker. |
+| Auth de API keys | `POST /auth/api-key`, `GET /auth/derive-api-key`, `GET /auth/api-keys`, readonly keys | Headers firmados L1/L2 | `apiKey`, `secret`, `passphrase`, listas de keys | Parseamos a `ApiCreds`; si crear falla hacemos fallback a derive. |
+| RFQ | `/rfq/request`, `/rfq/quote`, `/rfq/data/*`, `/rfq/request/accept`, `/rfq/quote/approve` | `assetIn`, `assetOut`, `amountIn`, `amountOut`, IDs RFQ, filtros | Requests/quotes RFQ y estado de match | Convertimos unidades, redondeamos por tick, serializamos cuerpo exacto para firma L2. |
+
+#### Tratamiento estándar de parámetros y respuestas
+
+- **Request**: enviamos `Content-Type: application/json`, headers de auth según nivel (L0/L1/L2), y query params explícitos (sin magia implícita).
+- **Errores**: toda respuesta HTTP distinta de `200` levanta `PolyApiException`.
+- **Respuesta**: si hay JSON, devolvemos `dict`; si no, texto plano.
+- **Tipado interno**: para partes críticas (orderbook, api creds, RFQ payload), convertimos a tipos del cliente (`OrderBookSummary`, `ApiCreds`, etc.).
+- **Precisión**: precio/tamaño se redondean con la configuración de tick size antes de enviar órdenes/RFQ.
+
+### 2) Qué otras APIs ofrece Polymarket (además de lo que ya usamos)
+
+Polymarket separa dominios en varias APIs. Esto nos permite elegir el canal correcto según caso de uso.
+
+| API | Base URL | ¿Auth? | Para qué sirve | Endpoints útiles a evaluar |
+|---|---|---|---|---|
+| **Gamma API** | `https://gamma-api.polymarket.com` | Pública | Discovery/browsing: eventos, mercados, tags, series, comments, sports, search, perfiles públicos | Events (`list/get`), Markets (`list/by-slug`), Search, Tags, Series, Comments, Sports metadata |
+| **Data API** | `https://data-api.polymarket.com` | Pública | Analytics y datos de usuario/mercado | Posiciones abiertas/cerradas, actividad de usuario, holders, open interest, leaderboards, builder analytics |
+| **CLOB API** | `https://clob.polymarket.com` | Mixta (público + trading autenticado) | Precios/orderbook + ejecución (órdenes, cancelaciones, trades, RFQ) | Price history, rewards/rebates, profile endpoints, leaderboard, websockets market/user/sports |
+| **Bridge API** | `https://bridge.polymarket.com` | Según operación | Depósitos/retiros (proxy de fun.xyz) | Supported assets, create deposit/withdrawal addresses, quote, tx status |
+| **Relayer API** | (documentada en API Reference) | Sí, según endpoint | Envío y seguimiento de transacciones de relayer/safe | Submit transaction, tx by id, recent txs, nonce actual, safe deployed, API keys |
+
+### 3) Compendio corto de “qué enviar / qué recibir” por familia
+
+| Familia | Enviamos típicamente | Recibimos típicamente |
+|---|---|---|
+| Discovery (Gamma/CLOB markets) | `limit`, `offset`/`cursor`, `slug`, `tag`, filtros de estado | Objetos de mercado/evento, tags, timestamps, estado de mercado |
+| Pricing/Orderbook (CLOB) | `token_id` (uno o varios), `side`, rango temporal en histórico | `bids/asks`, `midpoint`, `spread`, `last_trade_price`, series históricas |
+| Orders/Trading (CLOB) | Orden firmada (price, size, side, token, nonce/salt, tipo), IDs para cancelación | Ack de creación/cancelación, estado de orden, órdenes paginadas |
+| Trades/Activity (CLOB/Data) | Filtros por `market`, `asset_id`, ventana temporal, dirección | Trades/actividad paginada, métricas agregadas |
+| Cuenta/Perfil (Data/CLOB profile) | Wallet address, fechas/rangos, filtros de mercado | Posiciones, PnL/valor, estadísticas por usuario |
+| RFQ (CLOB) | `assetIn/out`, `amountIn/out`, request/quote IDs, aceptación/aprobación | RFQ requests/quotes, mejor cotización, estado de ejecución |
+
+> Recomendación MVP: mantener **Gamma + CLOB público** para discovery/pricing, activar **CLOB autenticado** solo en ejecución, y sumar **Data API** cuando necesitemos analítica de rendimiento o reporting avanzado.
+
 ## Talic
 
 - Talic implementation overview: `Talic/README.md`

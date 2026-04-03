@@ -114,6 +114,7 @@ class PaperPosition:
     token_id: str
     size: float
     avg_price: float
+    expected_end_utc: str | None = None
     status: PositionStatus = PositionStatus.OPEN
     pnl_gross: float | None = None
     pnl_net: float | None = None

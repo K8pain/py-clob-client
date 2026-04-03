@@ -11,9 +11,9 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "KORLIC_v2"))
 
 from Korlic_v2.bot import KorlicBot
-from Korlic_v2.factory import PublicGammaClient, _extract_resolution
+from Korlic_v2.factory import PublicGammaClient, _extract_market_status, _extract_resolution
 from Korlic_v2.launcher import _run_all
-from Korlic_v2.models import BookLevel, ClassificationStatus, ClassifiedMarket, Ledger, MarketRecord, OrderBookSnapshot, SignalCandidate
+from Korlic_v2.models import BookLevel, ClassificationStatus, ClassifiedMarket, Ledger, MarketRecord, OrderBookSnapshot, PaperPosition, SignalCandidate
 from Korlic_v2.paper import PaperExecutionEngine
 from Korlic_v2.signal import SignalConfig, SignalEngine
 from Korlic_v2.runtime import TimeSync
@@ -426,6 +426,7 @@ def test_business_pnl_table_contains_aggregated_fields(tmp_path: Path):
         cumulative_won=5,
         cumulative_lost=3,
         cumulative_realized_pnl=-42.125,
+        nearest_pending_expiration_utc="2026-04-03T22:59:00+00:00",
         cash_available=-10.0,
         cash_reserved=15.0,
     )
@@ -434,6 +435,30 @@ def test_business_pnl_table_contains_aggregated_fields(tmp_path: Path):
     assert "cash_available" in table
     assert "-10.0000" in table
     assert "trades_total" in table
+    assert "nearest_pending_expiration_utc" in table
+
+
+def test_nearest_pending_expiration_uses_positions_end_time(tmp_path: Path):
+    storage = KorlicStorage(str(tmp_path / "korlic.sqlite"))
+    bot = KorlicBot(gamma=DummyGamma([]), clob=DummyClob({}), ws=DummyWs(), storage=storage)
+    bot.paper.positions = {
+        "m-late": PaperPosition(
+            market_id="m-late",
+            token_id="t-late",
+            size=1.0,
+            avg_price=0.97,
+            expected_end_utc="2026-04-03T23:15:00+00:00",
+        ),
+        "m-soon": PaperPosition(
+            market_id="m-soon",
+            token_id="t-soon",
+            size=1.0,
+            avg_price=0.97,
+            expected_end_utc="2026-04-03T22:45:00+00:00",
+        ),
+    }
+
+    assert bot._nearest_pending_expiration_utc() == "2026-04-03T22:45:00+00:00"
 
 
 def test_extract_resolution_detects_winner_token():
@@ -448,6 +473,23 @@ def test_extract_resolution_detects_winner_token():
     )
     assert resolved is True
     assert winner == "no"
+
+
+def test_extract_market_status_reads_official_resolution_signals():
+    status = _extract_market_status(
+        {
+            "closed": True,
+            "closedTime": "2026-04-03T22:30:00Z",
+            "resolvedBy": "uma",
+            "umaResolutionStatus": "RESOLVED",
+            "market_resolved": False,
+        }
+    )
+    assert status["closed"] is True
+    assert status["resolved"] is False
+    assert status["closed_time"] == "2026-04-03T22:30:00Z"
+    assert status["resolved_by"] == "uma"
+    assert status["uma_resolution_status"] == "resolved"
 
 
 def test_extract_resolution_detects_winner_from_outcome_prices():

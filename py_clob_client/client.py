@@ -141,6 +141,7 @@ class ClobClient:
         self.chain_id = chain_id
         self.signer = Signer(key, chain_id) if key else None
         self.creds = creds
+        # Determina automáticamente el nivel de autenticación disponible (L0/L1/L2).
         self.mode = self._get_client_mode()
 
         if self.signer:
@@ -152,7 +153,7 @@ class ClobClient:
         if builder_config:
             self.builder_config = builder_config
 
-        # local cache
+        # Cachés locales para evitar llamadas repetidas en datos de mercado relativamente estables.
         self.__tick_sizes = {}
         self.__tick_size_timestamps = {}
         self.__tick_size_ttl = tick_size_ttl
@@ -402,6 +403,7 @@ class ClobClient:
     def get_tick_size(self, token_id: str) -> TickSize:
         cached_at = self.__tick_size_timestamps.get(token_id)
 
+        # Fast path: reutiliza el valor en caché mientras no expire el TTL.
         if (
             token_id in self.__tick_sizes
             and cached_at is not None
@@ -409,6 +411,7 @@ class ClobClient:
         ):
             return self.__tick_sizes[token_id]
 
+        # Slow path: consulta al API y refresca la caché.
         result = get("{}{}?token_id={}".format(self.host, GET_TICK_SIZE, token_id))
         self.__tick_sizes[token_id] = str(result["minimum_tick_size"])
         self.__tick_size_timestamps[token_id] = time.monotonic()
@@ -498,7 +501,7 @@ class ClobClient:
         """
         self.assert_level_1_auth()
 
-        # add resolve_order_options, or similar
+        # 1) Resolver reglas de mercado (tick size) antes de firmar.
         tick_size = self.__resolve_tick_size(
             order_args.token_id,
             options.tick_size if options else None,
@@ -514,18 +517,20 @@ class ClobClient:
                 + str(1 - float(tick_size))
             )
 
+        # 2) Resolver el flag de neg_risk desde opciones o desde el mercado.
         neg_risk = (
             options.neg_risk
             if options and options.neg_risk
             else self.get_neg_risk(order_args.token_id)
         )
 
-        # fee rate
+        # 3) Normalizar fee rate para que coincida con la configuración del mercado.
         fee_rate_bps = self.__resolve_fee_rate(
             order_args.token_id, order_args.fee_rate_bps
         )
         order_args.fee_rate_bps = fee_rate_bps
 
+        # 4) Firmar la orden con parámetros ya validados.
         return self.builder.create_order(
             order_args,
             CreateOrderOptions(
@@ -545,12 +550,13 @@ class ClobClient:
         """
         self.assert_level_1_auth()
 
-        # add resolve_order_options, or similar
+        # 1) Resolver tick size y restricciones de precio.
         tick_size = self.__resolve_tick_size(
             order_args.token_id,
             options.tick_size if options else None,
         )
 
+        # Si no viene precio explícito, se calcula usando profundidad del libro.
         if order_args.price is None or order_args.price <= 0:
             order_args.price = self.calculate_market_price(
                 order_args.token_id,
@@ -569,18 +575,20 @@ class ClobClient:
                 + str(1 - float(tick_size))
             )
 
+        # 2) Resolver neg_risk desde opciones o metadata del mercado.
         neg_risk = (
             options.neg_risk
             if options and options.neg_risk
             else self.get_neg_risk(order_args.token_id)
         )
 
-        # fee rate
+        # 3) Resolver fee rate final usado para firmar.
         fee_rate_bps = self.__resolve_fee_rate(
             order_args.token_id, order_args.fee_rate_bps
         )
         order_args.fee_rate_bps = fee_rate_bps
 
+        # 4) Crear orden market firmada.
         return self.builder.create_market_order(
             order_args,
             CreateOrderOptions(
@@ -604,7 +612,7 @@ class ClobClient:
             serialized_body=json.dumps(body, separators=(",", ":"), ensure_ascii=False),
         )
         headers = create_level_2_headers(self.signer, self.creds, request_args)
-        # Builder flow
+        # Flujo preferido: si hay builder auth, adjuntar headers del builder a L2.
         if self.can_builder_auth():
             builder_headers = self._generate_builder_headers(request_args, headers)
             if builder_headers is not None:
@@ -613,7 +621,7 @@ class ClobClient:
                     headers=builder_headers,
                     data=request_args.serialized_body,
                 )
-        # send exact serialized bytes
+        # Fallback: enviar bytes serializados exactos para preservar la firma L2.
         return post(
             "{}{}".format(self.host, POST_ORDERS),
             headers=headers,
@@ -636,7 +644,7 @@ class ClobClient:
             serialized_body=json.dumps(body, separators=(",", ":"), ensure_ascii=False),
         )
         headers = create_level_2_headers(self.signer, self.creds, request_args)
-        # Builder flow
+        # Flujo preferido con builder; si no aplica, cae a L2 estándar.
         if self.can_builder_auth():
             builder_headers = self._generate_builder_headers(request_args, headers)
             if builder_headers is not None:
@@ -758,6 +766,7 @@ class ClobClient:
 
         results = []
         next_cursor = next_cursor if next_cursor is not None else "MA=="
+        # Paginación completa hasta END_CURSOR para devolver la colección completa.
         while next_cursor != END_CURSOR:
             url = add_query_open_orders_params(
                 "{}{}".format(self.host, ORDERS), params, next_cursor
@@ -816,6 +825,7 @@ class ClobClient:
 
         results = []
         next_cursor = next_cursor if next_cursor is not None else "MA=="
+        # Paginación completa de trades del usuario.
         while next_cursor != END_CURSOR:
             url = add_query_trade_params(
                 "{}{}".format(self.host, TRADES), params, next_cursor

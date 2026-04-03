@@ -21,6 +21,7 @@ class KorlicStorage:
 
     def _init_db(self) -> None:
         with self._connect() as conn:
+            # Estado serializado del runtime (ledger, órdenes, posiciones, dedupe).
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS state (
@@ -76,6 +77,7 @@ class KorlicStorage:
             )
 
     def save_event(self, event: StructuredEvent) -> None:
+        # Guarda el evento completo serializado para trazabilidad/auditoría.
         with self._connect() as conn:
             conn.execute(
                 """
@@ -135,6 +137,7 @@ class KorlicStorage:
             )
 
     def save_runtime_state(self, ledger: Ledger, orders: dict[str, PaperOrder], positions: dict[str, PaperPosition], dedupe: set[str]) -> None:
+        # Snapshot atómico para poder reanudar ejecución tras reinicio.
         payload = {
             "ledger": asdict(ledger),
             "orders": {k: asdict(v) for k, v in orders.items()},
@@ -155,6 +158,7 @@ class KorlicStorage:
         return json.loads(row[0])
 
     def export_csv_reports(self, output_dir: str) -> dict[str, str]:
+        # Exporta datasets listos para análisis operativo sin tocar SQLite manualmente.
         report_ts = datetime.now(timezone.utc).isoformat()
         base = Path(output_dir)
         base.mkdir(parents=True, exist_ok=True)

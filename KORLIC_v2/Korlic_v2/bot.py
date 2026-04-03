@@ -76,6 +76,7 @@ class KorlicBot:
         self.universe = DiscoveryState(markets={}, parser_version="korlic-v1", discovered_at=datetime.utcnow().isoformat())
 
     async def run_cycle(self) -> None:
+        # Ciclo principal: sincroniza tiempo, descubre universo, evalúa señales y ejecuta paper trading.
         self.cycle_number += 1
         started = time.perf_counter()
         logger.debug("cycle.start run_id=%s cycle_number=%s", self.run_id, self.cycle_number)
@@ -133,6 +134,7 @@ class KorlicBot:
             if classified.status.value == "candidate_5m" and classified.confidence < self.classifier.min_confidence:
                 filter_stats["low_confidence"] += 1
             candidate_pool.append(
+                # Se fuerza entrada al pool vigilado para no perder mercados cerca de expiración.
                 ClassifiedMarket(
                     market=market,
                     status=classified.status if classified.status == ClassificationStatus.CANDIDATE_5M else ClassificationStatus.CANDIDATE_5M,
@@ -273,6 +275,7 @@ class KorlicBot:
                 )
                 if signal is None:
                     continue
+                # Paper flow: crear orden pseudo-real y simular llenado contra libro visible.
                 order = self.paper.create_order(signal)
                 if order is None:
                     logger.debug(
@@ -390,6 +393,7 @@ class KorlicBot:
                     )
 
         settled_count, settled_net_pnl = await self._settle_resolved_positions()
+        # Persistencia al final de ciclo para permitir recuperación tras reinicios.
         self.storage.save_runtime_state(
             ledger=self.ledger,
             orders=self.paper.open_orders,
@@ -593,6 +597,7 @@ class KorlicBot:
     async def _settle_resolved_positions(self) -> tuple[int, float]:
         settled_count = 0
         settled_net_pnl = 0.0
+        # Recorre posiciones abiertas y liquida solo las que ya resolvieron en CLOB/Gamma.
         for market_id in list(self.paper.positions.keys()):
             resolved, winner_token_id = await self._retry(
                 lambda m_id=market_id: self.clob.get_market_resolution(m_id),
@@ -632,6 +637,7 @@ class KorlicBot:
             await self.ws.subscribe(token_ids)
 
     async def _retry(self, operation, degraded_reason: str):
+        # Retry exponencial con jitter; si agota intentos, registra evento degraded y continúa.
         for attempt in range(self.config.retry_max):
             try:
                 return await operation()

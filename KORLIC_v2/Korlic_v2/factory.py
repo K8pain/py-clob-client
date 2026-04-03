@@ -54,6 +54,7 @@ class PublicGammaClient:
         return await asyncio.to_thread(self._fetch_active_markets)
 
     def _fetch_active_markets(self) -> list[MarketRecord]:
+        # Descarga paginada de eventos/markets para construir el universo operable.
         url = f"{self.base_url.rstrip('/')}/events"
         offset = 0
         pages_fetched = 0
@@ -87,6 +88,7 @@ class PublicGammaClient:
                 logger.debug("gamma.fetch page=%s offset=%s empty_page=true", page, offset)
                 break
 
+            # Segunda capa de filtro para quedarnos con mercados aún activos/abiertos.
             page_active_tradeable = [
                 item
                 for item in page_markets
@@ -131,6 +133,7 @@ class PublicGammaClient:
 
         records: list[MarketRecord] = []
         for item in raw_markets:
+            # Normaliza payload heterogéneo de Gamma a un modelo interno estable.
             record = _to_market_record(item)
             if record is not None and record.active and not record.closed:
                 records.append(record)
@@ -191,6 +194,7 @@ class PublicClobClient:
             parsed = _parse_epoch_value(server_time)
             if parsed is not None:
                 return parsed
+        # Fallback defensivo: tiempo UTC local si la respuesta no trae timestamp parseable.
         return int(datetime.now(timezone.utc).timestamp() * 1000)
 
     async def get_orderbook(self, token_id: str) -> OrderBookSnapshot:
@@ -216,6 +220,7 @@ class EmptyWsClient:
 
 
 def build_bot(db_path: str) -> KorlicBot:
+    # Punto único de ensamblado de dependencias para ejecución local/CLI.
     storage = KorlicStorage(db_path)
     return KorlicBot(
         gamma=PublicGammaClient(
@@ -250,6 +255,7 @@ class _IntervalRateLimiter:
         self._last_call_at = 0.0
 
     def wait_turn(self) -> None:
+        # Rate limiter simple por intervalo mínimo entre llamadas.
         with self._lock:
             now = time.monotonic()
             elapsed = now - self._last_call_at

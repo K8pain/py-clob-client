@@ -36,6 +36,7 @@ class SignalEngine:
         time_sync: TimeSync,
         available_cash: float,
     ) -> tuple[SignalCandidate | None, str]:
+        # 1) Guardrail temporal: solo operar cerca del vencimiento.
         seconds_to_end = time_sync.seconds_to(end_epoch_ms)
         if seconds_to_end > self.config.entry_seconds_threshold:
             return None, "skipped_outside_entry_window"
@@ -46,10 +47,12 @@ class SignalEngine:
 
         # CLOB binary markets are quoted in probability dollars [0.00, 1.00].
         # Example: 60c is represented as 0.60 (not 60).
+        # 2) Guardrail de precio: solo toma entradas <= precio objetivo.
         normalized = round(best_ask, 2)
         if normalized > self.config.entry_price:
             return None, "skipped_price_above_entry_threshold"
 
+        # 3) Guardrails de tamaño y liquidez visible.
         budget_for_trade = self.config.max_stake_per_trade
         size_by_cash = budget_for_trade / self.config.entry_price
         if size_by_cash < self.config.min_order_size:
@@ -59,6 +62,7 @@ class SignalEngine:
         if visible_depth < self.config.min_operational_size:
             return None, "skipped_insufficient_depth"
 
+        # 4) Dedupe por bucket temporal para evitar repetir señal sobre el mismo mercado/token.
         dedupe_key = f"{market.market.market_id}:{token_id}:{seconds_to_end // self.config.entry_seconds_threshold}"
         if dedupe_key in self.dedupe:
             return None, "skipped_duplicate_signal"

@@ -1,3 +1,5 @@
+"""Reglas de señal para decidir cuándo abrir una operación en paper trading."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

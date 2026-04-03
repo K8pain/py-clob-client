@@ -1,3 +1,5 @@
+"""Punto de entrada en consola para iniciar el bot KORLIC v2."""
+
 from __future__ import annotations
 
 import argparse

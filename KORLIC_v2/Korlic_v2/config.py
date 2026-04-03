@@ -1,3 +1,5 @@
+"""Constantes y configuración por entorno para ejecutar KORLIC v2."""
+
 from __future__ import annotations
 
 import os

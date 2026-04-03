@@ -1,3 +1,5 @@
+"""Modelos de datos tipados usados en el flujo de trading de KORLIC v2."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

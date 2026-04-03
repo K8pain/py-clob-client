@@ -1,3 +1,5 @@
+"""Pruebas del ciclo del bot para validar selección, señales y ejecución."""
+
 from __future__ import annotations
 
 import sys

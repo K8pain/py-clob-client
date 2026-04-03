@@ -1,3 +1,5 @@
+"""Orquestador principal del ciclo de mercado, señal y ejecución del bot."""
+
 from __future__ import annotations
 
 import asyncio

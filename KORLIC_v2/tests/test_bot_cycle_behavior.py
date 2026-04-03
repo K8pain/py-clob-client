@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from Korlic_v2.bot import KorlicBot
+from Korlic_v2.bot import KorlicBot, KorlicConfig
 from Korlic_v2.models import BookLevel, MarketRecord, OrderBookSnapshot, StructuredEvent
 
 
@@ -33,6 +33,15 @@ class InMemoryStorage:
 
     def export_csv_reports(self, output_dir: str):  # noqa: ARG002
         return {}
+
+    def trade_counters(self) -> dict[str, float | int]:
+        return {
+            "total_trades": 0,
+            "won_trades": 0,
+            "lost_trades": 0,
+            "open_trades": 0,
+            "net_pnl": 0.0,
+        }
 
 
 class StubGamma:
@@ -161,3 +170,38 @@ def test_run_cycle_can_open_orders_after_first_cycle() -> None:
 
     opened_events = [event for event in storage.events if event.event_type == "PSEUDO_ORDER_OPENED"]
     assert len(opened_events) == 2
+
+
+def test_run_cycle_filters_markets_beyond_near_expiry_window() -> None:
+    now = datetime.now(timezone.utc)
+    future_market = MarketRecord(
+        market_id="m-future",
+        event_id="e-future",
+        question="BTC up or down in 6h",
+        slug="btc-updown-6h",
+        token_ids=("tok-future",),
+        end_time=now + timedelta(hours=6),
+        active=True,
+        closed=False,
+        accepting_orders=True,
+        enable_order_book=True,
+    )
+    orderbook = OrderBookSnapshot(
+        token_id="tok-future",
+        bids=(BookLevel(price=0.59, size=30.0),),
+        asks=(BookLevel(price=0.59, size=30.0),),
+        ts_ms=0,
+    )
+    storage = InMemoryStorage()
+    bot = KorlicBot(
+        gamma=StubGamma([[future_market]]),
+        clob=StubClob(server_times_ms=[int(now.timestamp() * 1000)], orderbook=orderbook),
+        ws=StubWs(),
+        storage=storage,  # type: ignore[arg-type]
+        config=KorlicConfig(watch_window_seconds=7200),
+    )
+
+    asyncio.run(bot.run_cycle())
+
+    opened_events = [event for event in storage.events if event.event_type == "PSEUDO_ORDER_OPENED"]
+    assert opened_events == []

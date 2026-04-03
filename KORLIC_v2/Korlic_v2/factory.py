@@ -417,8 +417,11 @@ def _extract_resolution(payload: object) -> tuple[bool, str | None]:
             winner_token_id = winner_token_id or None
             resolved = True
             break
-    if resolved and winner_token_id is None:
-        winner_token_id = _infer_winner_token_id(tokens=tokens, outcome_prices=payload.get("outcomePrices"))
+    if winner_token_id is None:
+        inferred_winner = _infer_winner_token_id(tokens=tokens, outcome_prices=payload.get("outcomePrices"))
+        if inferred_winner is not None:
+            winner_token_id = inferred_winner
+            resolved = True
     return (resolved, winner_token_id)
 
 

@@ -505,3 +505,19 @@ def test_extract_resolution_detects_winner_from_outcome_prices():
     )
     assert resolved is True
     assert winner == "yes"
+
+
+def test_extract_resolution_marks_resolved_when_outcome_prices_define_winner():
+    resolved, winner = _extract_resolution(
+        {
+            "resolved": False,
+            "market_resolved": False,
+            "outcomePrices": "[1,0]",
+            "tokens": [
+                {"token_id": "yes"},
+                {"token_id": "no"},
+            ],
+        }
+    )
+    assert resolved is True
+    assert winner == "yes"

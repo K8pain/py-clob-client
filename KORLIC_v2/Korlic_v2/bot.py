@@ -383,6 +383,7 @@ class KorlicBot:
                     )
                     after = self.paper.positions.get(market.market.market_id)
                     if after is not None:
+                        after.expected_end_utc = market.market.end_time.isoformat()
                         self._log_decision(
                             market=market,
                             token_id=token_id,
@@ -410,6 +411,7 @@ class KorlicBot:
                                         "market_id": after.market_id,
                                         "token_id": after.token_id,
                                         "entered_at_utc": after.opened_at_utc,
+                                        "expected_end_utc": after.expected_end_utc,
                                         "entry_price": after.avg_price,
                                         "size": after.size,
                                     },
@@ -489,6 +491,7 @@ class KorlicBot:
         markets_parsed = len(markets)
         markets_in_watchlist = len(watchlist)
         cumulative_realized_pnl = float(counters["net_pnl"])
+        nearest_pending_expiration_utc = self._nearest_pending_expiration_utc()
         business_logger.info(
             "business.pnl.update\n%s",
             self._format_business_pnl_table(
@@ -504,6 +507,7 @@ class KorlicBot:
                 cumulative_won=cumulative_won,
                 cumulative_lost=cumulative_lost,
                 cumulative_realized_pnl=cumulative_realized_pnl,
+                nearest_pending_expiration_utc=nearest_pending_expiration_utc,
                 cash_available=self.ledger.cash_available,
                 cash_reserved=self.ledger.cash_reserved,
             ),
@@ -546,6 +550,7 @@ class KorlicBot:
         cumulative_won: int,
         cumulative_lost: int,
         cumulative_realized_pnl: float,
+        nearest_pending_expiration_utc: str | None,
         cash_available: float,
         cash_reserved: float,
     ) -> str:
@@ -562,6 +567,7 @@ class KorlicBot:
             ("cumulative_won", str(cumulative_won)),
             ("cumulative_lost", str(cumulative_lost)),
             ("cumulative_realized_pnl", f"{cumulative_realized_pnl:.4f}"),
+            ("nearest_pending_expiration_utc", nearest_pending_expiration_utc or "n/a"),
             ("cash_available", f"{cash_available:.4f}"),
             ("cash_reserved", f"{cash_reserved:.4f}"),
         ]
@@ -586,6 +592,7 @@ class KorlicBot:
                     "market_id": position.market_id,
                     "token_id": position.token_id,
                     "entered_at_utc": position.opened_at_utc,
+                    "expected_end_utc": position.expected_end_utc,
                     "entry_price": position.avg_price,
                     "size": position.size,
                     "status": position.status.value,
@@ -741,6 +748,21 @@ class KorlicBot:
                 output.append(market)
         return output
 
+    def _nearest_pending_expiration_utc(self) -> str | None:
+        nearest: datetime | None = None
+        for position in self.paper.positions.values():
+            if position.status not in {PositionStatus.OPEN, PositionStatus.PENDING_RESOLUTION}:
+                continue
+            if not position.expected_end_utc:
+                continue
+            try:
+                expected_end = datetime.fromisoformat(position.expected_end_utc)
+            except ValueError:
+                continue
+            if nearest is None or expected_end < nearest:
+                nearest = expected_end
+        return nearest.isoformat() if nearest is not None else None
+
     async def _settle_resolved_positions(self) -> tuple[int, float]:
         settled_count = 0
         settled_net_pnl = 0.0
@@ -754,6 +776,12 @@ class KorlicBot:
         ]
         for market_id in pending_market_ids:
             market_end_ms = known_end_times.get(market_id)
+            position = self.paper.positions.get(market_id)
+            if market_end_ms is None and position is not None and position.expected_end_utc:
+                try:
+                    market_end_ms = int(datetime.fromisoformat(position.expected_end_utc).timestamp() * 1000)
+                except ValueError:
+                    market_end_ms = None
             if market_end_ms is not None and now_ms < market_end_ms:
                 continue
             resolved, winner_token_id = await self._retry(

@@ -1,3 +1,5 @@
+"""Descubrimiento y filtrado de mercados desde la API Gamma de Polymarket."""
+
 from __future__ import annotations
 
 import re

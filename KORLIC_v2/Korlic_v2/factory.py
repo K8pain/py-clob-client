@@ -1,3 +1,5 @@
+"""Fábrica de dependencias para construir una instancia lista del bot."""
+
 from __future__ import annotations
 
 import asyncio

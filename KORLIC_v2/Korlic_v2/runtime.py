@@ -1,3 +1,5 @@
+"""Estado de ejecución en memoria para órdenes, posiciones y deduplicación."""
+
 from __future__ import annotations
 
 import time

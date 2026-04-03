@@ -282,23 +282,18 @@ def _run_all(args: argparse.Namespace) -> int:
 
     if args.factory:
         bot = _load_bot(args.factory, db_path)
-        if args.keep_running:
-            asyncio.run(
-                _run_loop_with_trade_log(
-                    bot=bot,
-                    logger=logger,
-                    db_path=db_path,
-                    trade_log_file=Path(args.trades_log_file),
-                    aggregate_log_file=Path(args.aggregate_log_file),
-                    output_dir=Path(args.output_dir),
-                    interval_seconds=args.interval_seconds,
-                )
+        asyncio.run(
+            _run_loop_with_trade_log(
+                bot=bot,
+                logger=logger,
+                db_path=db_path,
+                trade_log_file=Path(args.trades_log_file),
+                aggregate_log_file=Path(args.aggregate_log_file),
+                output_dir=Path(args.output_dir),
+                interval_seconds=args.interval_seconds,
             )
-            return 0
-        asyncio.run(_run_once(bot, logger))
-        _append_trade_log(db_path, Path(args.trades_log_file))
-        _append_cycle_aggregate_log(db_path, Path(args.aggregate_log_file), 1, bot.run_id)
-        bot.export_reports(args.output_dir)
+        )
+        return 0
 
     storage = KorlicStorage(args.db_path)
     files = storage.export_csv_reports(args.output_dir)
@@ -322,22 +317,18 @@ def _print_specs() -> None:
     lines = [
         "",
         "=== Korlic launcher | comandos ===",
-        "1) Run una vez:",
-        "   python -m Korlic_v2.launcher run-once --factory Korlic_v2.factory:build_bot",
-        "2) Run continuo:",
+        "1) Run continuo:",
         "   python -m Korlic_v2.launcher run-loop --factory Korlic_v2.factory:build_bot --interval-seconds 5",
-        "3) Ver log (tail -f):",
+        "2) Ver log (tail -f):",
         "   python -m Korlic_v2.launcher tail-log --follow",
-        "4) Ver señales/órdenes/trades (tail -f):",
+        "3) Ver señales/órdenes/trades (tail -f):",
         "   python -m Korlic_v2.launcher tail-trades --follow",
-        "5) Ver eventos persistidos (SQLite):",
+        "4) Ver eventos persistidos (SQLite):",
         "   python -m Korlic_v2.launcher events --limit 30",
-        "6) Exportar reportes CSV:",
+        "5) Exportar reportes CSV:",
         "   python -m Korlic_v2.launcher export-reports",
-        "7) Pipeline MVP desatendido:",
+        "6) Pipeline MVP desatendido (loop continuo):",
         "   python -m Korlic_v2.launcher --all --factory Korlic_v2.factory:build_bot",
-        "8) Pipeline continuo con --all:",
-        "   python -m Korlic_v2.launcher --all --factory Korlic_v2.factory:build_bot --keep-running",
         "",
     ]
     print("\n".join(lines))
@@ -345,7 +336,7 @@ def _print_specs() -> None:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Orquestador CLI de Korlic para operación por SSH.")
-    parser.add_argument("--all", action="store_true", help="Ejecuta pipeline MVP: run-once, reportes y tails.")
+    parser.add_argument("--all", action="store_true", help="Ejecuta pipeline MVP en loop continuo.")
     parser.add_argument("--factory", help="Factory 'modulo:funcion' que retorna KorlicBot para --all.")
     parser.add_argument("--db-path", default=str(DEFAULT_DB_PATH))
     parser.add_argument("--log-file", default=str(DEFAULT_LOG_PATH))
@@ -354,20 +345,10 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--aggregate-log-file", default=str(DEFAULT_CYCLE_AGGREGATES_LOG_PATH))
     parser.add_argument("--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"), default="INFO")
     parser.add_argument("--interval-seconds", type=float, default=5.0, help="Intervalo para modo continuo.")
-    parser.add_argument("--keep-running", action="store_true", help="Con --all, no termina y sigue en loop.")
     parser.add_argument("-n", "--lines", type=int, default=30, help="Líneas para tail en --all.")
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("specs", help="Muestra comandos sugeridos.")
-
-    run_once = sub.add_parser("run-once", help="Ejecuta un ciclo de Korlic.")
-    run_once.add_argument("--factory", required=True, help="Factory 'modulo:funcion' que retorna KorlicBot.")
-    run_once.add_argument("--db-path", default=str(DEFAULT_DB_PATH))
-    run_once.add_argument("--log-file", default=str(DEFAULT_LOG_PATH))
-    run_once.add_argument("--trades-log-file", default=str(DEFAULT_TRADES_LOG_PATH))
-    run_once.add_argument("--output-dir", default=str(DEFAULT_REPORTS_PATH))
-    run_once.add_argument("--aggregate-log-file", default=str(DEFAULT_CYCLE_AGGREGATES_LOG_PATH))
-    run_once.add_argument("--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"), default="INFO")
 
     run_loop = sub.add_parser("run-loop", help="Ejecuta ciclos de Korlic en loop.")
     run_loop.add_argument("--factory", required=True, help="Factory 'modulo:funcion' que retorna KorlicBot.")
@@ -435,13 +416,6 @@ def main(argv: list[str] | None = None) -> int:
     db_path = Path(args.db_path)
     logger = _setup_logger(Path(args.log_file), log_level=args.log_level)
     bot = _load_bot(args.factory, db_path)
-
-    if args.command == "run-once":
-        asyncio.run(_run_once(bot, logger))
-        _append_trade_log(db_path, Path(args.trades_log_file))
-        _append_cycle_aggregate_log(db_path, Path(args.aggregate_log_file), 1, bot.run_id)
-        bot.export_reports(args.output_dir)
-        return 0
 
     asyncio.run(
         _run_loop_with_trade_log(

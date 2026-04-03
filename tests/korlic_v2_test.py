@@ -20,7 +20,7 @@ from Korlic_v2.runtime import TimeSync
 from Korlic_v2.storage import KorlicStorage
 
 
-def test_run_all_keep_running_skips_run_once(monkeypatch, tmp_path: Path):
+def test_run_all_runs_loop_without_run_once_option(monkeypatch, tmp_path: Path):
     called = {"run_once": 0, "loop": 0}
 
     class DummyBot:
@@ -43,7 +43,6 @@ def test_run_all_keep_running_skips_run_once(monkeypatch, tmp_path: Path):
         log_file=str(tmp_path / "launcher.log"),
         output_dir=str(tmp_path / "reports"),
         lines=5,
-        keep_running=True,
         factory="Korlic_v2.factory:build_bot",
         trades_log_file=str(tmp_path / "trades.log"),
         interval_seconds=60.0,

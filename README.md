@@ -10,6 +10,46 @@ Python client for the Polymarket Central Limit Order Book (CLOB).
 
 - Arquitectura MVP del bot Polymarket (discovery, histórico, paper, backtester y real): `docs/polymarket_engine_mvp/README.md`.
 
+## Resumen rápido de APIs y endpoints para **KORLIC**
+
+> Fuente oficial: https://docs.polymarket.com/api-reference/introduction
+
+### 1) Qué usa hoy KORLIC (real, en código)
+
+| Componente KORLIC | Endpoint | Parámetros que envía | Respuesta que recibe | Cómo lo trata KORLIC |
+|---|---|---|---|---|
+| Gamma discovery (seed) | `GET /events/slug/{seed_event_slug}` | `seed_event_slug` | Evento con mercados asociados | Obtiene mercados iniciales de la familia (punto de arranque del discovery). |
+| Gamma discovery (paginado) | `GET /events` | `active=true`, `closed=false`, `limit`, `offset` | Lista paginada de eventos/markets | Recorre páginas, filtra activos/no cerrados y normaliza a `MarketRecord`. |
+| CLOB tiempo | `GET /time` | Sin body | Timestamp del servidor | Sincroniza `ts_ms`; si falla parseo, usa hora UTC local como fallback. |
+| CLOB microestructura | `GET /book?token_id=...` | `token_id` | Bids/asks del orderbook | Convierte niveles a `float` y construye `OrderBookSnapshot`. |
+| CLOB estado/resolución | `GET /markets/{condition_id}` | `condition_id` | Estado de mercado y campos de resolución | Extrae si el mercado ya resolvió y outcome ganador (si existe). |
+
+### 2) Contrato request/response que KORLIC espera (resumido)
+
+| Flujo | Request mínimo | Response mínima esperada | Tratamiento en KORLIC |
+|---|---|---|---|
+| Discovery de universo | `active`, `closed`, `limit`, `offset` | Items con `id`, `conditionId`, `slug`, `endDate*`, `clobTokenIds/tokens`, `active`, `closed` | Normaliza campos con variantes de nombre y descarta mercados inválidos o cerrados. |
+| Snapshot de book | `token_id` | `bids[]`, `asks[]` con `price`, `size` | Convierte a `BookLevel` y lo usa para señal/validación de profundidad. |
+| Estado del mercado | `condition_id` | Señales de resolución (`resolved/closed/outcome`) | Si está resuelto, evita nuevas acciones operativas para ese mercado. |
+| Tiempo servidor | (sin params) | `timestamp` (ms o parseable) | Usa server time; fallback defensivo a UTC local si formato no coincide. |
+
+### 3) Qué **no** usa aún KORLIC, pero podría servirle
+
+| API | Endpoints potenciales | Valor para KORLIC |
+|---|---|---|
+| CLOB WebSocket | market/user channels | Reemplazar polling por streaming para menor latencia. |
+| Data API | user activity, positions, open interest | Features cuantitativas para filtros/ranking de mercados. |
+| CLOB pricing extra | spreads/midpoints/last-trade-history | Mejorar señal de entrada/salida con microestructura adicional. |
+| Rewards/Rebates | endpoints de incentivos | Optimizar PnL neto (no solo precio de ejecución). |
+| Profile | posiciones/trades/snapshots | Conciliación y reporting operativo automático. |
+
+### 4) Prioridad sugerida (MVP KORLIC)
+
+1. **WebSocket market channel** para pasar de polling a eventos en vivo.  
+2. **Data API (open interest + activity)** para mejorar selección de mercados.  
+3. **Spreads/midpoints/last-trades** para enriquecer reglas de señal.  
+4. **Profile snapshots** para reconciliación diaria y observabilidad.
+
 ## Talic
 
 - Talic implementation overview: `Talic/README.md`

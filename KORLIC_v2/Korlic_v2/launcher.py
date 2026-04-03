@@ -23,6 +23,7 @@ DEFAULT_CYCLE_AGGREGATES_LOG_PATH = Path("var/korlic/reports/cycle_aggregates.js
 
 
 def _setup_logger(log_file: Path, log_level: str = "INFO") -> logging.Logger:
+    # Unifica logs de launcher, bot y factory en el mismo archivo operativo.
     log_file.parent.mkdir(parents=True, exist_ok=True)
     level = getattr(logging, str(log_level).upper(), logging.INFO)
     logger = logging.getLogger("korlic-launcher")
@@ -51,6 +52,7 @@ def _setup_logger(log_file: Path, log_level: str = "INFO") -> logging.Logger:
 
 
 def _load_bot(factory_ref: str, db_path: Path) -> KorlicBot:
+    # Carga dinámica para permitir factories custom vía CLI.
     module_name, sep, attr_name = factory_ref.partition(":")
     if not sep:
         raise ValueError("factory debe tener formato 'paquete.modulo:funcion'")
@@ -69,6 +71,7 @@ def _load_bot(factory_ref: str, db_path: Path) -> KorlicBot:
         raise TypeError("factory debe retornar KorlicBot")
 
     if str(bot.storage.db_path) != str(db_path):
+        # Asegura que el bot use el DB path pedido por CLI.
         bot.storage = KorlicStorage(str(db_path))
     return bot
 
@@ -81,6 +84,7 @@ async def _run_once(bot: KorlicBot, logger: logging.Logger) -> None:
 
 
 def _append_trade_log(db_path: Path, trade_log_file: Path, since_id: int = 0) -> int:
+    # Export incremental de eventos relevantes para monitoreo "tail -f".
     query = (
         "SELECT id, ts_utc, event_type, decision, reason_code, market_id, payload "
         "FROM events WHERE id > ? AND event_type IN ("
@@ -113,6 +117,7 @@ def _append_cycle_aggregate_log(
     cycle_number: int,
     run_id: str,
 ) -> None:
+    # Snapshot por ciclo con métricas de trading + diagnósticos para observabilidad.
     aggregate_log_file.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -268,6 +273,7 @@ def _print_tail(path: Path, lines: int, title: str) -> None:
 
 
 def _run_all(args: argparse.Namespace) -> int:
+    # Pipeline MVP: ejecutar ciclo(s), exportar reportes y mostrar tails.
     db_path = Path(args.db_path)
     log_file = Path(args.log_file)
     logger = _setup_logger(log_file, log_level=args.log_level)

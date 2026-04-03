@@ -28,6 +28,7 @@ class PaperExecutionEngine:
 
     def create_order(self, signal: SignalCandidate) -> PaperOrder | None:
         reserved = signal.price * signal.size
+        # Reserva caja antes de crear orden para mantener consistencia del ledger.
         if not self.ledger.reserve(reserved, allow_negative=self.allow_negative_cash):
             return None
 
@@ -47,6 +48,7 @@ class PaperExecutionEngine:
             self.last_fill_report = None
             return 0.0
 
+        # Simulación de fill por profundidad visible al precio límite o mejor.
         fillable = min(order.remaining, book.depth_at_or_better(order.limit_price))
         if fillable <= 0:
             self.last_fill_report = None
@@ -67,6 +69,7 @@ class PaperExecutionEngine:
             pos.size = total
 
         if order.remaining <= 1e-9:
+            # Orden completamente ejecutada: cierra y libera reserva no usada.
             order.status = OrderStatus.FILLED
             order.closed_at_utc = datetime.now(timezone.utc).isoformat()
             order.close_reason = "filled"
@@ -75,6 +78,7 @@ class PaperExecutionEngine:
                 self.ledger.release(unused)
             state = "PSEUDO_ORDER_FILLED"
         else:
+            # Fill parcial: la orden permanece abierta para próximos ciclos.
             state = "PSEUDO_ORDER_PARTIAL_FILL"
         self.last_fill_report = FillReport(
             fill_size=fillable,
@@ -108,6 +112,7 @@ class PaperExecutionEngine:
             return pos
 
         payout = pos.size if pos.token_id == winner_token_id else 0.0
+        # Mercado binario: payoff final por share es 1.0 si acierta, 0.0 si falla.
         gross = payout - (pos.avg_price * pos.size)
         pos.pnl_gross = gross
         pos.pnl_net = gross

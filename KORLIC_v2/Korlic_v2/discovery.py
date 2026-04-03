@@ -26,6 +26,7 @@ class MarketClassifier:
         return any(term in haystack for term in CRYPTO_TERMS)
 
     def classify(self, market: MarketRecord) -> ClassifiedMarket:
+        # Prioriza metadata explícita por encima de heurísticas regex.
         if market.cadence_hint and market.cadence_hint.strip().lower() in {"5m", "5min", "300s"}:
             return ClassifiedMarket(market=market, status=ClassificationStatus.CANDIDATE_5M, confidence=1.0, method="metadata")
 
@@ -49,6 +50,7 @@ class DiscoveryEngine:
     def build_universe(self, raw_markets: list[MarketRecord]) -> DiscoveryState:
         universe: dict[str, ClassifiedMarket] = {}
         for market in raw_markets:
+            # Filtro MVP: solo mercados operables + crypto + confianza mínima.
             if not market.is_operable:
                 continue
             if not self.classifier.is_crypto(market):
@@ -63,6 +65,7 @@ class DiscoveryEngine:
         )
 
     def refresh_universe(self, previous: DiscoveryState, fresh: DiscoveryState) -> DiscoveryState:
+        # Merge con "source of truth" en fresh: agrega/actualiza y elimina lo que ya no está activo.
         merged = dict(previous.markets)
         for market_id, record in fresh.markets.items():
             merged[market_id] = record

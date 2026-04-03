@@ -416,6 +416,13 @@ def test_business_pnl_table_contains_aggregated_fields(tmp_path: Path):
     bot = KorlicBot(gamma=DummyGamma([]), clob=DummyClob({}), ws=DummyWs(), storage=storage)
     table = bot._format_business_pnl_table(
         cycle=7,
+        markets_parsed=14,
+        markets_in_watchlist=9,
+        tokens_evaluated=18,
+        trades_taken_cycle=3,
+        cumulative_trades=11,
+        pending_positions=6,
+        settled_total=5,
         settled_this_cycle=2,
         cumulative_won=5,
         cumulative_lost=3,
@@ -427,6 +434,7 @@ def test_business_pnl_table_contains_aggregated_fields(tmp_path: Path):
     assert "-42.1250" in table
     assert "cash_available" in table
     assert "-10.0000" in table
+    assert "trades_total" in table
 
 
 def test_extract_resolution_detects_winner_token():

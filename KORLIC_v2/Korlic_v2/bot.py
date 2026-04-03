@@ -57,6 +57,10 @@ class KorlicConfig:
     retry_jitter_ms: int = 250
     strategy_version: str = "korlic-v1"
     order_expiry_seconds: int = 5
+    market_side_mode: str = "BOTH"
+    min_market_volume_m: float = 0.0
+    min_market_liquidity_m: float = 0.0
+    max_market_spread: float = 1.0
 
 
 @dataclass
@@ -116,6 +120,9 @@ class KorlicBot:
             "non_crypto": 0,
             "outside_watch_window": 0,
             "low_confidence": 0,
+            "low_volume": 0,
+            "low_liquidity": 0,
+            "high_spread": 0,
         }
         candidate_pool: list[ClassifiedMarket] = []
         for market in markets:
@@ -128,6 +135,15 @@ class KorlicBot:
             if not market.enable_order_book:
                 filter_stats["orderbook_disabled"] += 1
             if not market.is_operable:
+                continue
+            if market.volume_24h < self.config.min_market_volume_m * 1_000_000:
+                filter_stats["low_volume"] += 1
+                continue
+            if market.liquidity < self.config.min_market_liquidity_m:
+                filter_stats["low_liquidity"] += 1
+                continue
+            if market.spread is not None and market.spread > self.config.max_market_spread:
+                filter_stats["high_spread"] += 1
                 continue
             classified = self.classifier.classify(market)
             seconds_to_end = self.time_sync.seconds_to(int(market.end_time.timestamp() * 1000))
@@ -147,7 +163,7 @@ class KorlicBot:
                 )
             )
         logger.debug(
-            "cycle.discovery.filters operable=%s crypto=%s near_expiry_operable=%s watch_window_seconds=%s inactive=%s closed=%s not_accepting_orders=%s orderbook_disabled=%s non_crypto=%s outside_watch_window=%s low_confidence=%s",
+            "cycle.discovery.filters operable=%s crypto=%s near_expiry_operable=%s watch_window_seconds=%s inactive=%s closed=%s not_accepting_orders=%s orderbook_disabled=%s non_crypto=%s outside_watch_window=%s low_confidence=%s low_volume=%s low_liquidity=%s high_spread=%s",
             operable_markets,
             crypto_markets,
             near_expiry_operable_markets,
@@ -159,6 +175,9 @@ class KorlicBot:
             filter_stats["non_crypto"],
             filter_stats["outside_watch_window"],
             filter_stats["low_confidence"],
+            filter_stats["low_volume"],
+            filter_stats["low_liquidity"],
+            filter_stats["high_spread"],
         )
         if operable_markets == 0:
             sample = [
@@ -214,7 +233,17 @@ class KorlicBot:
                 )
                 continue
             logger.debug("cycle.market.evaluate market_id=%s", market.market.market_id)
-            for token_id in market.market.token_ids:
+            for token_index, token_id in enumerate(market.market.token_ids):
+                trade_outcome = self._token_direction_label(market.market, token_index)
+                if not self._should_trade_outcome(trade_outcome):
+                    logger.debug(
+                        "cycle.token.skip market_id=%s token_id=%s reason=side_mode side_mode=%s token_outcome=%s",
+                        market.market.market_id,
+                        token_id,
+                        self.config.market_side_mode,
+                        trade_outcome,
+                    )
+                    continue
                 end_epoch_ms = int(market.market.end_time.timestamp() * 1000)
                 book = await self._retry(lambda tid=token_id: self.clob.get_orderbook(tid), "degraded_clob_rest")
                 if book is None:
@@ -273,7 +302,7 @@ class KorlicBot:
                         "signal_price": self.signal_engine.config.entry_price,
                         "market_slug": market.market.slug,
                         "market_title": market.market.question,
-                        "outcome": "YES",
+                        "trade_outcome": trade_outcome,
                         "side": "BUY",
                     },
                 )
@@ -289,12 +318,13 @@ class KorlicBot:
                     )
                     continue
                 logger.debug(
-                    "cycle.order.open market_id=%s market_slug=%s order_id=%s size=%s price=%s side=BUY outcome=YES",
+                    "cycle.order.open market_id=%s market_slug=%s order_id=%s size=%s price=%s side=BUY trade_outcome=%s",
                     market.market.market_id,
                     market.market.slug,
                     order.paper_order_id,
                     order.requested_size,
                     order.limit_price,
+                    trade_outcome,
                 )
                 execution_stats["orders_opened"] += 1
                 execution_stats["trades_taken"] += 1
@@ -313,7 +343,7 @@ class KorlicBot:
                         "order_open_timestamp_utc": order.opened_at_utc,
                         "rationale": "signal_candidate",
                         "side": "BUY",
-                        "outcome": "YES",
+                        "trade_outcome": trade_outcome,
                     },
                 )
                 before = self.paper.positions.get(market.market.market_id)
@@ -361,7 +391,7 @@ class KorlicBot:
                             "market_id": market.market.market_id,
                             "token_id": token_id,
                             "side": "BUY",
-                            "outcome": "YES",
+                            "outcome": trade_outcome,
                             "signal_timestamp_utc": datetime.now(timezone.utc).isoformat(),
                             "fill_timestamp_utc": order.closed_at_utc or datetime.now(timezone.utc).isoformat(),
                             "settlement_timestamp_utc": order.closed_at_utc or datetime.now(timezone.utc).isoformat(),
@@ -727,6 +757,24 @@ class KorlicBot:
             if 0 < seconds_to_end <= self.config.watch_window_seconds:
                 output.append(market)
         return output
+
+    def _token_direction_label(self, market: MarketRecord, token_index: int) -> str:
+        if token_index < len(market.outcome_labels):
+            outcome = market.outcome_labels[token_index].strip().upper()
+            if outcome:
+                return outcome
+        return "YES" if token_index == 0 else "NO"
+
+    def _should_trade_outcome(self, token_outcome: str) -> bool:
+        side_mode = self.config.market_side_mode.strip().upper()
+        outcome = token_outcome.strip().upper()
+        if side_mode == "BOTH":
+            return True
+        if side_mode == "YES":
+            return outcome in {"YES", "UP"}
+        if side_mode == "NO":
+            return outcome in {"NO", "DOWN"}
+        return True
 
     async def _settle_resolved_positions(self) -> tuple[int, float]:
         settled_count = 0

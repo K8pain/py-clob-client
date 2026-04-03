@@ -14,7 +14,7 @@ import httpx
 
 from py_clob_client.client import ClobClient
 
-from .bot import KorlicBot
+from .bot import KorlicBot, KorlicConfig
 from .config import (
     KORLIC_CLOB_HOST,
     KORLIC_CLOB_MIN_INTERVAL_SECONDS,
@@ -24,6 +24,10 @@ from .config import (
     KORLIC_GAMMA_MIN_INTERVAL_SECONDS,
     KORLIC_GAMMA_PAGE_LIMIT,
     KORLIC_GAMMA_SEED_EVENT_SLUG,
+    KORLIC_MARKET_MAX_SPREAD,
+    KORLIC_MARKET_MIN_LIQUIDITY_M,
+    KORLIC_MARKET_MIN_VOLUME_M,
+    KORLIC_MARKET_SIDE_MODE,
     KORLIC_SIGNAL_ENTRY_PRICE,
     KORLIC_SIGNAL_ENTRY_SECONDS,
     KORLIC_SIGNAL_MAX_STAKE,
@@ -236,6 +240,12 @@ def build_bot(db_path: str) -> KorlicBot:
         clob=PublicClobClient(host=KORLIC_CLOB_HOST, min_interval_seconds=KORLIC_CLOB_MIN_INTERVAL_SECONDS),
         ws=EmptyWsClient(),
         storage=storage,
+        config=KorlicConfig(
+            market_side_mode=KORLIC_MARKET_SIDE_MODE,
+            min_market_volume_m=KORLIC_MARKET_MIN_VOLUME_M,
+            min_market_liquidity_m=KORLIC_MARKET_MIN_LIQUIDITY_M,
+            max_market_spread=KORLIC_MARKET_MAX_SPREAD,
+        ),
         signal_engine=SignalEngine(
             SignalConfig(
                 entry_price=KORLIC_SIGNAL_ENTRY_PRICE,
@@ -299,6 +309,7 @@ def _to_market_record(item: dict) -> MarketRecord | None:
             normalized_tags.append(str(tag.get("slug") or tag.get("label") or "").strip())
         else:
             normalized_tags.append(str(tag).strip())
+    outcome_labels = _parse_outcome_labels(tokens=tokens)
 
     return MarketRecord(
         market_id=market_id,
@@ -311,10 +322,44 @@ def _to_market_record(item: dict) -> MarketRecord | None:
         closed=_parse_bool(item.get("closed"), default=False),
         accepting_orders=_parse_bool(item.get("accepting_orders", item.get("acceptingOrders")), default=True),
         enable_order_book=_parse_bool(item.get("enable_order_book", item.get("enableOrderBook")), default=True),
+        volume_24h=_parse_float(item.get("volume24hr") or item.get("volume24h") or item.get("volume"), default=0.0),
+        liquidity=_parse_float(item.get("liquidityNum") or item.get("liquidity"), default=0.0),
+        spread=_parse_optional_float(item.get("spread") or item.get("spreadPercent")),
+        outcome_labels=outcome_labels,
         tags=tuple(tag for tag in normalized_tags if tag),
         category=str(item.get("category")) if item.get("category") is not None else None,
         cadence_hint=str(item.get("cadence_hint")) if item.get("cadence_hint") is not None else None,
     )
+
+
+def _parse_outcome_labels(tokens: object) -> tuple[str, ...]:
+    if not isinstance(tokens, list):
+        return ()
+    labels: list[str] = []
+    for token in tokens:
+        if isinstance(token, dict):
+            label = token.get("outcome") or token.get("name") or token.get("label")
+            if label is not None:
+                labels.append(str(label).strip().upper())
+            continue
+        if token is not None:
+            labels.append(str(token).strip().upper())
+    return tuple(label for label in labels if label)
+
+
+def _parse_optional_float(value: object) -> float | None:
+    if value is None:
+        return None
+    return _parse_float(value, default=0.0)
+
+
+def _parse_float(value: object, default: float = 0.0) -> float:
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _parse_end_time(value: str | None) -> datetime | None:

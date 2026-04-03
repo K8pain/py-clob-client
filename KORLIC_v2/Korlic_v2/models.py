@@ -39,6 +39,10 @@ class MarketRecord:
     closed: bool
     accepting_orders: bool
     enable_order_book: bool
+    volume_24h: float = 0.0
+    liquidity: float = 0.0
+    spread: float | None = None
+    outcome_labels: tuple[str, ...] = ()
     tags: tuple[str, ...] = ()
     category: str | None = None
     cadence_hint: str | None = None

@@ -435,20 +435,19 @@ class KorlicBot:
         cumulative_won = sum(1 for position in self.paper.positions.values() if position.status.value == "WON")
         cumulative_lost = sum(1 for position in self.paper.positions.values() if position.status.value == "LOST")
         cumulative_realized_pnl = sum((position.pnl_net or 0.0) for position in self.paper.positions.values())
-        if self.last_logged_cumulative_realized_pnl != cumulative_realized_pnl:
-            business_logger.info(
-                "business.pnl.update\n%s",
-                self._format_business_pnl_table(
-                    cycle=self.cycle_number,
-                    settled_this_cycle=settled_count,
-                    cumulative_won=cumulative_won,
-                    cumulative_lost=cumulative_lost,
-                    cumulative_realized_pnl=cumulative_realized_pnl,
-                    cash_available=self.ledger.cash_available,
-                    cash_reserved=self.ledger.cash_reserved,
-                ),
-            )
-            self.last_logged_cumulative_realized_pnl = cumulative_realized_pnl
+        business_logger.info(
+            "business.pnl.update\n%s",
+            self._format_business_pnl_table(
+                cycle=self.cycle_number,
+                settled_this_cycle=settled_count,
+                cumulative_won=cumulative_won,
+                cumulative_lost=cumulative_lost,
+                cumulative_realized_pnl=cumulative_realized_pnl,
+                cash_available=self.ledger.cash_available,
+                cash_reserved=self.ledger.cash_reserved,
+            ),
+        )
+        self.last_logged_cumulative_realized_pnl = cumulative_realized_pnl
         logger.debug(
             "cycle.trading.summary cycle=%s trades_taken=%s orders_opened=%s orders_filled=%s orders_partial=%s orders_expired=%s settled_this_cycle=%s cumulative_won=%s cumulative_lost=%s cumulative_realized_pnl=%.4f",
             self.cycle_number,

@@ -43,6 +43,7 @@ class MarketRecord:
 
     @property
     def is_operable(self) -> bool:
+        # Condición mínima para intentar operar un mercado en runtime.
         return self.active and not self.closed and self.accepting_orders and self.enable_order_book
 
 
@@ -73,6 +74,7 @@ class OrderBookSnapshot:
         return min(level.price for level in self.asks)
 
     def depth_at_or_better(self, limit_price: float) -> float:
+        # Liquidez visible disponible para compra a precio límite o mejor.
         return sum(level.size for level in self.asks if level.price <= limit_price)
 
 
@@ -125,6 +127,7 @@ class Ledger:
     holdings: dict[str, float] = field(default_factory=dict)
 
     def reserve(self, amount: float, allow_negative: bool = False) -> bool:
+        # Mueve cash de disponible a reservado; opcionalmente permite sobregiro en simulación.
         if not allow_negative and amount > self.cash_available:
             return False
         self.cash_available -= amount

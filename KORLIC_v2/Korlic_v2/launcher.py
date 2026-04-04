@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Callable
 
 from .bot import KorlicBot
-from .config import KORLIC_RESET_DB_ON_START
+from .config import KORLIC_LOOP_INTERVAL_SECONDS, KORLIC_RESET_DB_ON_START
 from .storage import KorlicStorage
 
 
@@ -328,7 +328,7 @@ def _print_specs() -> None:
         "",
         "=== Korlic launcher | comandos ===",
         "1) Run continuo:",
-        "   python -m Korlic_v2.launcher run-loop --factory Korlic_v2.factory:build_bot --interval-seconds 5",
+        "   python -m Korlic_v2.launcher run-loop --factory Korlic_v2.factory:build_bot --interval-seconds 240",
         "2) Ver log (tail -f):",
         "   python -m Korlic_v2.launcher tail-log --follow",
         "3) Ver señales/órdenes/trades (tail -f):",
@@ -354,7 +354,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", default=str(DEFAULT_REPORTS_PATH))
     parser.add_argument("--aggregate-log-file", default=str(DEFAULT_CYCLE_AGGREGATES_LOG_PATH))
     parser.add_argument("--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"), default="INFO")
-    parser.add_argument("--interval-seconds", type=float, default=5.0, help="Intervalo para modo continuo.")
+    parser.add_argument(
+        "--interval-seconds",
+        type=float,
+        default=KORLIC_LOOP_INTERVAL_SECONDS,
+        help="Intervalo para modo continuo.",
+    )
     parser.add_argument("-n", "--lines", type=int, default=30, help="Líneas para tail en --all.")
     sub = parser.add_subparsers(dest="command")
 
@@ -368,7 +373,7 @@ def _build_parser() -> argparse.ArgumentParser:
     run_loop.add_argument("--output-dir", default=str(DEFAULT_REPORTS_PATH))
     run_loop.add_argument("--aggregate-log-file", default=str(DEFAULT_CYCLE_AGGREGATES_LOG_PATH))
     run_loop.add_argument("--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"), default="INFO")
-    run_loop.add_argument("--interval-seconds", type=float, default=5.0)
+    run_loop.add_argument("--interval-seconds", type=float, default=KORLIC_LOOP_INTERVAL_SECONDS)
 
     tail_log = sub.add_parser("tail-log", help="Muestra log del launcher.")
     tail_log.add_argument("--log-file", default=str(DEFAULT_LOG_PATH))

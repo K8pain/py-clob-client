@@ -372,8 +372,8 @@ class KorlicBot:
                     )
                     self.storage.save_pseudo_trade(
                         {
-                            "pseudo_trade_id": f"pt-{self.run_id[:8]}-{market.market.market_id}",
-                            "pseudo_order_id": f"po-{self.run_id[:8]}-{market.market.market_id}",
+                            "pseudo_trade_id": f"pt-{market.market.market_id}-{token_id}",
+                            "pseudo_order_id": f"po-{market.market.market_id}-{token_id}",
                             "run_id": self.run_id,
                             "strategy_version": self.config.strategy_version,
                             "market_id": market.market.market_id,
@@ -502,7 +502,11 @@ class KorlicBot:
         counters = self.storage.trade_counters()
         cumulative_won = int(counters["won_trades"])
         cumulative_lost = int(counters["lost_trades"])
-        pending_positions = int(counters["open_trades"])
+        pending_positions = sum(
+            1
+            for position in self.paper.positions.values()
+            if position.status in {PositionStatus.OPEN, PositionStatus.PENDING_RESOLUTION}
+        )
         cumulative_trades = int(counters["total_trades"])
         markets_parsed = len(markets)
         markets_in_watchlist = len(watchlist)
@@ -713,8 +717,8 @@ class KorlicBot:
         )
         self.storage.save_pseudo_trade(
             {
-                "pseudo_trade_id": f"pt-{self.run_id[:8]}-{market.market.market_id}",
-                "pseudo_order_id": f"po-{self.run_id[:8]}-{market.market.market_id}",
+                "pseudo_trade_id": f"pt-{market.market.market_id}-{position.token_id}",
+                "pseudo_order_id": f"po-{market.market.market_id}-{position.token_id}",
                 "run_id": self.run_id,
                 "strategy_version": self.config.strategy_version,
                 "market_id": market.market.market_id,

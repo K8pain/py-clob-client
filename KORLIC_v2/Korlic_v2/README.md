@@ -72,6 +72,7 @@
   - `KORLIC_CLOB_HOST` (default `https://clob.polymarket.com`)
   - `KORLIC_GAMMA_MIN_INTERVAL_SECONDS` (default `0.25`, ~4 req/s)
   - `KORLIC_CLOB_MIN_INTERVAL_SECONDS` (default `0.05`, ~20 req/s)
+  - `KORLIC_LOOP_INTERVAL_SECONDS` (default `240`, 4 minutos entre ciclos)
 
 ## 8) Orquestador CLI (operación por terminal/SSH)
 Se añadió `Korlic_v2/launcher.py` para operar Korlic desde CLI de forma conveniente.
@@ -90,7 +91,7 @@ python -m Korlic_v2.launcher run-once \
 # ejecutar en loop continuo
 python -m Korlic_v2.launcher run-loop \
   --factory Korlic_v2.factory:build_bot \
-  --interval-seconds 5
+  --interval-seconds 240
 
 # tail del log del launcher (equivalente a tail -f)
 python -m Korlic_v2.launcher tail-log --follow

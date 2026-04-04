@@ -14,30 +14,30 @@ import httpx
 
 from py_clob_client.client import ClobClient
 
-from .bot import KorlicBot, KorlicConfig
+from .bot import MadawcBot, MadawcConfig
 from .config import (
-    KORLIC_CLOB_HOST,
-    KORLIC_CLOB_MIN_INTERVAL_SECONDS,
-    KORLIC_CYCLE_STEP_SLEEP_SECONDS,
-    KORLIC_GAMMA_BASE_URL,
-    KORLIC_GAMMA_FAMILY_PREFIX,
-    KORLIC_GAMMA_MAX_PAGES,
-    KORLIC_GAMMA_MIN_INTERVAL_SECONDS,
-    KORLIC_GAMMA_PAGE_LIMIT,
-    KORLIC_GAMMA_SEED_EVENT_SLUG,
-    KORLIC_MARKET_NEAR_EXPIRY_SECONDS,
-    KORLIC_MAX_TRADES_PER_MARKET,
-    KORLIC_ONLY_TRADE_THIS_MARKETS,
-    KORLIC_SIGNAL_ENTRY_PRICE,
-    KORLIC_SIGNAL_ENTRY_SECONDS,
-    KORLIC_SIGNAL_MAX_STAKE,
-    KORLIC_SIGNAL_MIN_DEPTH,
-    KORLIC_SIGNAL_MIN_SIZE,
-    KORLIC_SKIPPED_MARKET_PREFIXES,
+    MADAWC_CLOB_HOST,
+    MADAWC_CLOB_MIN_INTERVAL_SECONDS,
+    MADAWC_CYCLE_STEP_SLEEP_SECONDS,
+    MADAWC_GAMMA_BASE_URL,
+    MADAWC_GAMMA_FAMILY_PREFIX,
+    MADAWC_GAMMA_MAX_PAGES,
+    MADAWC_GAMMA_MIN_INTERVAL_SECONDS,
+    MADAWC_GAMMA_PAGE_LIMIT,
+    MADAWC_GAMMA_SEED_EVENT_SLUG,
+    MADAWC_MARKET_NEAR_EXPIRY_SECONDS,
+    MADAWC_MAX_TRADES_PER_MARKET,
+    MADAWC_ONLY_TRADE_THIS_MARKETS,
+    MADAWC_SIGNAL_ENTRY_PRICE,
+    MADAWC_SIGNAL_ENTRY_SECONDS,
+    MADAWC_SIGNAL_MAX_STAKE,
+    MADAWC_SIGNAL_MIN_DEPTH,
+    MADAWC_SIGNAL_MIN_SIZE,
+    MADAWC_SKIPPED_MARKET_PREFIXES,
 )
 from .models import BookLevel, MarketRecord, OrderBookSnapshot
 from .signal import SignalConfig, SignalEngine
-from .storage import KorlicStorage
+from .storage import MadawcStorage
 
 logger = logging.getLogger("korlic-factory")
 
@@ -231,35 +231,35 @@ class EmptyWsClient:
         return True
 
 
-def build_bot(db_path: str) -> KorlicBot:
+def build_bot(db_path: str) -> MadawcBot:
     # Punto único de ensamblado de dependencias para ejecución local/CLI.
-    storage = KorlicStorage(db_path)
-    return KorlicBot(
+    storage = MadawcStorage(db_path)
+    return MadawcBot(
         gamma=PublicGammaClient(
-            base_url=KORLIC_GAMMA_BASE_URL,
-            min_interval_seconds=KORLIC_GAMMA_MIN_INTERVAL_SECONDS,
-            page_limit=KORLIC_GAMMA_PAGE_LIMIT,
-            max_pages=KORLIC_GAMMA_MAX_PAGES,
-            seed_event_slug=KORLIC_GAMMA_SEED_EVENT_SLUG,
-            family_slug_prefix=KORLIC_GAMMA_FAMILY_PREFIX,
+            base_url=MADAWC_GAMMA_BASE_URL,
+            min_interval_seconds=MADAWC_GAMMA_MIN_INTERVAL_SECONDS,
+            page_limit=MADAWC_GAMMA_PAGE_LIMIT,
+            max_pages=MADAWC_GAMMA_MAX_PAGES,
+            seed_event_slug=MADAWC_GAMMA_SEED_EVENT_SLUG,
+            family_slug_prefix=MADAWC_GAMMA_FAMILY_PREFIX,
         ),
-        clob=PublicClobClient(host=KORLIC_CLOB_HOST, min_interval_seconds=KORLIC_CLOB_MIN_INTERVAL_SECONDS),
+        clob=PublicClobClient(host=MADAWC_CLOB_HOST, min_interval_seconds=MADAWC_CLOB_MIN_INTERVAL_SECONDS),
         ws=EmptyWsClient(),
         storage=storage,
-        config=KorlicConfig(
-            watch_window_seconds=KORLIC_MARKET_NEAR_EXPIRY_SECONDS,
-            max_trades_per_market=KORLIC_MAX_TRADES_PER_MARKET,
-            cycle_step_sleep_seconds=KORLIC_CYCLE_STEP_SLEEP_SECONDS,
-            skipped_market_prefixes=KORLIC_SKIPPED_MARKET_PREFIXES,
-            only_trade_this_markets=KORLIC_ONLY_TRADE_THIS_MARKETS,
+        config=MadawcConfig(
+            watch_window_seconds=MADAWC_MARKET_NEAR_EXPIRY_SECONDS,
+            max_trades_per_market=MADAWC_MAX_TRADES_PER_MARKET,
+            cycle_step_sleep_seconds=MADAWC_CYCLE_STEP_SLEEP_SECONDS,
+            skipped_market_prefixes=MADAWC_SKIPPED_MARKET_PREFIXES,
+            only_trade_this_markets=MADAWC_ONLY_TRADE_THIS_MARKETS,
         ),
         signal_engine=SignalEngine(
             SignalConfig(
-                entry_price=KORLIC_SIGNAL_ENTRY_PRICE,
-                entry_seconds_threshold=KORLIC_SIGNAL_ENTRY_SECONDS,
-                min_operational_size=KORLIC_SIGNAL_MIN_DEPTH,
-                min_order_size=KORLIC_SIGNAL_MIN_SIZE,
-                max_stake_per_trade=KORLIC_SIGNAL_MAX_STAKE,
+                entry_price=MADAWC_SIGNAL_ENTRY_PRICE,
+                entry_seconds_threshold=MADAWC_SIGNAL_ENTRY_SECONDS,
+                min_operational_size=MADAWC_SIGNAL_MIN_DEPTH,
+                min_order_size=MADAWC_SIGNAL_MIN_SIZE,
+                max_stake_per_trade=MADAWC_SIGNAL_MAX_STAKE,
             )
         ),
     )

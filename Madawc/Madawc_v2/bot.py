@@ -27,7 +27,7 @@ from .models import (
 from .paper import PaperExecutionEngine
 from .runtime import TimeSync
 from .signal import SignalConfig, SignalEngine
-from .storage import KorlicStorage
+from .storage import MadawcStorage
 
 logger = logging.getLogger("korlic-bot")
 business_logger = logging.getLogger("korlic-business")
@@ -54,7 +54,7 @@ class WsClient(Protocol):
 
 
 @dataclass
-class KorlicConfig:
+class MadawcConfig:
     watch_window_seconds: int = 900
     retry_max: int = 4
     retry_base_ms: int = 100
@@ -68,12 +68,12 @@ class KorlicConfig:
 
 
 @dataclass
-class KorlicBot:
+class MadawcBot:
     gamma: GammaClient
     clob: ClobClient
     ws: WsClient
-    storage: KorlicStorage
-    config: KorlicConfig = field(default_factory=KorlicConfig)
+    storage: MadawcStorage
+    config: MadawcConfig = field(default_factory=MadawcConfig)
     run_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     classifier: MarketClassifier = field(default_factory=MarketClassifier)
     time_sync: TimeSync = field(default_factory=TimeSync)

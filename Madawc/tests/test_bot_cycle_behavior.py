@@ -11,8 +11,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from Korlic_v2.bot import KorlicBot, KorlicConfig
-from Korlic_v2.models import BookLevel, MarketRecord, OrderBookSnapshot, StructuredEvent
+from Madawc_v2.bot import MadawcBot, MadawcConfig
+from Madawc_v2.models import BookLevel, MarketRecord, OrderBookSnapshot, StructuredEvent
 
 
 class InMemoryStorage:
@@ -98,7 +98,7 @@ def test_run_cycle_emits_business_log_each_cycle(monkeypatch: pytest.MonkeyPatch
         ts_ms=0,
     )
     storage = InMemoryStorage()
-    bot = KorlicBot(
+    bot = MadawcBot(
         gamma=StubGamma([[market], [market]]),
         clob=StubClob(
             server_times_ms=[int(now.timestamp() * 1000), int(now.timestamp() * 1000) + 1_000],
@@ -112,7 +112,7 @@ def test_run_cycle_emits_business_log_each_cycle(monkeypatch: pytest.MonkeyPatch
     def fake_info(message: str, payload: str) -> None:
         calls.append(f"{message}\n{payload}")
 
-    monkeypatch.setattr("Korlic_v2.bot.business_logger.info", fake_info)
+    monkeypatch.setattr("Madawc_v2.bot.business_logger.info", fake_info)
 
     asyncio.run(bot.run_cycle())
     asyncio.run(bot.run_cycle())
@@ -154,7 +154,7 @@ def test_run_cycle_can_open_orders_after_first_cycle() -> None:
         ts_ms=0,
     )
     storage = InMemoryStorage()
-    bot = KorlicBot(
+    bot = MadawcBot(
         gamma=StubGamma([[market_1], [market_2]]),
         clob=StubClob(
             server_times_ms=[int(now.timestamp() * 1000), int(now.timestamp() * 1000) + 1_000],
@@ -192,12 +192,12 @@ def test_run_cycle_filters_markets_beyond_near_expiry_window() -> None:
         ts_ms=0,
     )
     storage = InMemoryStorage()
-    bot = KorlicBot(
+    bot = MadawcBot(
         gamma=StubGamma([[future_market]]),
         clob=StubClob(server_times_ms=[int(now.timestamp() * 1000)], orderbook=orderbook),
         ws=StubWs(),
         storage=storage,  # type: ignore[arg-type]
-        config=KorlicConfig(watch_window_seconds=7200),
+        config=MadawcConfig(watch_window_seconds=7200),
     )
 
     asyncio.run(bot.run_cycle())
@@ -227,19 +227,19 @@ def test_run_cycle_applies_step_sleep_when_configured(monkeypatch: pytest.Monkey
         ts_ms=0,
     )
     storage = InMemoryStorage()
-    bot = KorlicBot(
+    bot = MadawcBot(
         gamma=StubGamma([[market]]),
         clob=StubClob(server_times_ms=[int(now.timestamp() * 1000)], orderbook=orderbook),
         ws=StubWs(),
         storage=storage,  # type: ignore[arg-type]
-        config=KorlicConfig(cycle_step_sleep_seconds=0.01),
+        config=MadawcConfig(cycle_step_sleep_seconds=0.01),
     )
     sleeps: list[float] = []
 
     async def fake_sleep(delay: float) -> None:
         sleeps.append(delay)
 
-    monkeypatch.setattr("Korlic_v2.bot.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("Madawc_v2.bot.asyncio.sleep", fake_sleep)
 
     asyncio.run(bot.run_cycle())
 
@@ -279,12 +279,12 @@ def test_run_cycle_skips_markets_by_configured_prefix() -> None:
         ts_ms=0,
     )
     storage = InMemoryStorage()
-    bot = KorlicBot(
+    bot = MadawcBot(
         gamma=StubGamma([[skipped_market, allowed_market]]),
         clob=StubClob(server_times_ms=[int(now.timestamp() * 1000)], orderbook=orderbook),
         ws=StubWs(),
         storage=storage,  # type: ignore[arg-type]
-        config=KorlicConfig(skipped_market_prefixes=("Counter-Strike",)),
+        config=MadawcConfig(skipped_market_prefixes=("Counter-Strike",)),
     )
 
     asyncio.run(bot.run_cycle())

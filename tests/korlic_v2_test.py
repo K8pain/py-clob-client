@@ -11,7 +11,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "KORLIC_v2"))
 
 from Korlic_v2.bot import KorlicBot
-from Korlic_v2.factory import PublicGammaClient, _extract_market_status, _extract_resolution
+from Korlic_v2.factory import PublicGammaClient, _extract_market_status, _extract_resolution, _to_market_record
 from Korlic_v2.launcher import _run_all
 from Korlic_v2.models import BookLevel, ClassificationStatus, ClassifiedMarket, Ledger, MarketRecord, OrderBookSnapshot, PaperPosition, SignalCandidate
 from Korlic_v2.paper import PaperExecutionEngine
@@ -521,3 +521,22 @@ def test_extract_resolution_marks_resolved_when_outcome_prices_define_winner():
     )
     assert resolved is True
     assert winner == "yes"
+
+
+def test_to_market_record_prefers_condition_id_for_clob_resolution():
+    record = _to_market_record(
+        {
+            "id": "1850861",
+            "conditionId": "0xcondition",
+            "question": "Will BTC be above X?",
+            "slug": "btc-updown-5m-test",
+            "endDate": "2026-04-03T23:50:00Z",
+            "active": True,
+            "closed": False,
+            "acceptingOrders": True,
+            "enableOrderBook": True,
+            "clobTokenIds": '["yes","no"]',
+        }
+    )
+    assert record is not None
+    assert record.market_id == "0xcondition"

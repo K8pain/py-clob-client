@@ -62,6 +62,7 @@ class KorlicConfig:
     strategy_version: str = "korlic-v1"
     order_expiry_seconds: int = 5
     max_trades_per_market: int = 1
+    cycle_step_sleep_seconds: float = 0.0
 
 
 @dataclass
@@ -189,6 +190,7 @@ class KorlicBot:
         logger.debug("cycle.watchlist near_expiry_markets=%s", len(watchlist))
         token_ids = sorted({token for item in watchlist for token in item.market.token_ids})
         await self._ensure_subscription(token_ids)
+        await self._step_sleep("subscription")
         logger.debug("cycle.subscription token_ids=%s", len(token_ids))
         orderbook_stats: dict[str, float] = {
             "samples": 0,
@@ -295,6 +297,7 @@ class KorlicBot:
                     },
                 )
                 if signal is None:
+                    await self._step_sleep("token_no_signal")
                     continue
                 # Paper flow: crear orden pseudo-real y simular llenado contra libro visible.
                 order = self.paper.create_order(signal)
@@ -458,6 +461,8 @@ class KorlicBot:
                             "order_close_timestamp_utc": order.closed_at_utc,
                         },
                     )
+                await self._step_sleep("token_done")
+            await self._step_sleep("market_done")
 
         settled_count, settled_net_pnl, pending_resolution_count, resolved_waiting_redeem_count = await self._settle_resolved_positions()
         # Persistencia al final de ciclo para permitir recuperación tras reinicios.
@@ -500,6 +505,8 @@ class KorlicBot:
                 settled_net_pnl,
             )
         counters = self.storage.trade_counters()
+        run_counters_getter = getattr(self.storage, "trade_counters_for_run", None)
+        run_counters = run_counters_getter(self.run_id) if callable(run_counters_getter) else counters
         cumulative_won = int(counters["won_trades"])
         cumulative_lost = int(counters["lost_trades"])
         pending_positions = sum(
@@ -508,6 +515,7 @@ class KorlicBot:
             if position.status in {PositionStatus.OPEN, PositionStatus.PENDING_RESOLUTION}
         )
         cumulative_trades = int(counters["total_trades"])
+        run_trades = int(run_counters["total_trades"])
         markets_parsed = len(markets)
         markets_in_watchlist = len(watchlist)
         cumulative_realized_pnl = float(counters["net_pnl"])
@@ -521,6 +529,7 @@ class KorlicBot:
                 tokens_evaluated=signal_stats["evaluated"],
                 trades_taken_cycle=execution_stats["trades_taken"],
                 cumulative_trades=cumulative_trades,
+                run_trades=run_trades,
                 pending_positions=pending_positions,
                 settled_total=(cumulative_won + cumulative_lost),
                 settled_this_cycle=settled_count,
@@ -566,6 +575,7 @@ class KorlicBot:
         tokens_evaluated: int,
         trades_taken_cycle: int,
         cumulative_trades: int,
+        run_trades: int,
         pending_positions: int,
         settled_total: int,
         settled_this_cycle: int,
@@ -585,6 +595,7 @@ class KorlicBot:
             ("tokens_evaluated", str(tokens_evaluated)),
             ("trades_cycle", str(trades_taken_cycle)),
             ("trades_total", str(cumulative_trades)),
+            ("trades_run_total", str(run_trades)),
             ("positions_pending", str(pending_positions)),
             ("positions_settled_total", str(settled_total)),
             ("settled_this_cycle", str(settled_this_cycle)),
@@ -882,3 +893,10 @@ class KorlicBot:
             )
         )
         return None
+
+    async def _step_sleep(self, reason: str) -> None:
+        delay_seconds = self.config.cycle_step_sleep_seconds
+        if delay_seconds <= 0:
+            return
+        logger.debug("cycle.step.sleep reason=%s sleep_seconds=%s", reason, delay_seconds)
+        await asyncio.sleep(delay_seconds)

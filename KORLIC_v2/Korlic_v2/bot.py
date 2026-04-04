@@ -61,6 +61,7 @@ class KorlicConfig:
     retry_jitter_ms: int = 250
     strategy_version: str = "korlic-v1"
     order_expiry_seconds: int = 5
+    max_trades_per_market: int = 1
 
 
 @dataclass
@@ -207,6 +208,7 @@ class KorlicBot:
             "orders_expired": 0,
             "trades_taken": 0,
         }
+        trades_taken_per_market: dict[str, int] = {}
 
         for market in watchlist:
             if not market.market.accepting_orders or not market.market.active or market.market.closed:
@@ -220,6 +222,17 @@ class KorlicBot:
                 continue
             logger.debug("cycle.market.evaluate market_id=%s", market.market.market_id)
             for token_id in market.market.token_ids:
+                market_id = market.market.market_id
+                market_trade_count = (1 if market_id in self.paper.positions else 0) + trades_taken_per_market.get(market_id, 0)
+                if market_trade_count >= self.config.max_trades_per_market:
+                    logger.debug(
+                        "cycle.market.skip market_id=%s token_id=%s reason=max_trades_per_market_reached current=%s limit=%s",
+                        market_id,
+                        token_id,
+                        market_trade_count,
+                        self.config.max_trades_per_market,
+                    )
+                    continue
                 end_epoch_ms = int(market.market.end_time.timestamp() * 1000)
                 book = await self._retry(lambda tid=token_id: self.clob.get_orderbook(tid), "degraded_clob_rest")
                 if book is None:
@@ -303,6 +316,7 @@ class KorlicBot:
                 )
                 execution_stats["orders_opened"] += 1
                 execution_stats["trades_taken"] += 1
+                trades_taken_per_market[market_id] = trades_taken_per_market.get(market_id, 0) + 1
                 self._log_decision(
                     market=market,
                     token_id=token_id,

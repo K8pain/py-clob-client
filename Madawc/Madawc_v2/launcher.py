@@ -18,35 +18,35 @@ from .config import MADAWC_LOOP_INTERVAL_SECONDS, MADAWC_RESET_DB_ON_START
 from .storage import MadawcStorage
 
 
-DEFAULT_DB_PATH = Path("var/korlic/korlic.sqlite")
-DEFAULT_LOG_PATH = Path("var/korlic/korlic-launcher.log")
-DEFAULT_TRADES_LOG_PATH = Path("var/korlic/korlic-trades.log")
-DEFAULT_REPORTS_PATH = Path("var/korlic/reports")
-DEFAULT_CYCLE_AGGREGATES_LOG_PATH = Path("var/korlic/reports/cycle_aggregates.jsonl")
+DEFAULT_DB_PATH = Path("var/madawc/madawc.sqlite")
+DEFAULT_LOG_PATH = Path("var/madawc/madawc-launcher.log")
+DEFAULT_TRADES_LOG_PATH = Path("var/madawc/madawc-trades.log")
+DEFAULT_REPORTS_PATH = Path("var/madawc/reports")
+DEFAULT_CYCLE_AGGREGATES_LOG_PATH = Path("var/madawc/reports/cycle_aggregates.jsonl")
 
 
 def _setup_logger(log_file: Path, log_level: str = "INFO") -> logging.Logger:
     # Unifica logs de launcher, bot y factory en el mismo archivo operativo.
     log_file.parent.mkdir(parents=True, exist_ok=True)
     level = getattr(logging, str(log_level).upper(), logging.INFO)
-    logger = logging.getLogger("korlic-launcher")
+    logger = logging.getLogger("madawc-launcher")
     logger.setLevel(level)
     logger.handlers.clear()
     handler = logging.FileHandler(log_file, encoding="utf-8")
     handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
     logger.addHandler(handler)
 
-    bot_logger = logging.getLogger("korlic-bot")
+    bot_logger = logging.getLogger("madawc-bot")
     bot_logger.setLevel(level)
     bot_logger.handlers.clear()
     bot_logger.addHandler(handler)
     bot_logger.propagate = False
-    factory_logger = logging.getLogger("korlic-factory")
+    factory_logger = logging.getLogger("madawc-factory")
     factory_logger.setLevel(level)
     factory_logger.handlers.clear()
     factory_logger.addHandler(handler)
     factory_logger.propagate = False
-    biz_logger = logging.getLogger("korlic-business")
+    biz_logger = logging.getLogger("madawc-business")
     biz_logger.setLevel(level)
     biz_logger.handlers.clear()
     biz_logger.addHandler(handler)

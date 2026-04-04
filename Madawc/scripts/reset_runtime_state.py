@@ -6,10 +6,10 @@ import argparse
 from pathlib import Path
 
 
-DEFAULT_DB_PATH = Path("var/korlic/korlic.sqlite")
-DEFAULT_LOG_PATH = Path("var/korlic/korlic-launcher.log")
-DEFAULT_TRADES_LOG_PATH = Path("var/korlic/korlic-trades.log")
-DEFAULT_REPORTS_PATH = Path("var/korlic/reports")
+DEFAULT_DB_PATH = Path("var/madawc/madawc.sqlite")
+DEFAULT_LOG_PATH = Path("var/madawc/madawc-launcher.log")
+DEFAULT_TRADES_LOG_PATH = Path("var/madawc/madawc-trades.log")
+DEFAULT_REPORTS_PATH = Path("var/madawc/reports")
 
 
 def _remove_file(path: Path) -> bool:

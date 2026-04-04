@@ -29,8 +29,8 @@ from .runtime import TimeSync
 from .signal import SignalConfig, SignalEngine
 from .storage import MadawcStorage
 
-logger = logging.getLogger("korlic-bot")
-business_logger = logging.getLogger("korlic-business")
+logger = logging.getLogger("madawc-bot")
+business_logger = logging.getLogger("madawc-business")
 
 
 class GammaClient(Protocol):
@@ -59,7 +59,7 @@ class MadawcConfig:
     retry_max: int = 4
     retry_base_ms: int = 100
     retry_jitter_ms: int = 250
-    strategy_version: str = "korlic-v1"
+    strategy_version: str = "madawc-v1"
     order_expiry_seconds: int = 5
     max_trades_per_market: int = 1
     cycle_step_sleep_seconds: float = 0.0
@@ -83,9 +83,9 @@ class MadawcBot:
     last_logged_cumulative_realized_pnl: float | None = None
 
     def __post_init__(self) -> None:
-        self.discovery = DiscoveryEngine(classifier=self.classifier, parser_version="korlic-v1")
+        self.discovery = DiscoveryEngine(classifier=self.classifier, parser_version="madawc-v1")
         self.paper = PaperExecutionEngine(ledger=self.ledger)
-        self.universe = DiscoveryState(markets={}, parser_version="korlic-v1", discovered_at=datetime.utcnow().isoformat())
+        self.universe = DiscoveryState(markets={}, parser_version="madawc-v1", discovered_at=datetime.utcnow().isoformat())
 
     async def run_cycle(self) -> None:
         # Ciclo principal: sincroniza tiempo, descubre universo, evalúa señales y ejecuta paper trading.

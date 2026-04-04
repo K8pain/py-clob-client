@@ -39,7 +39,7 @@ from .models import BookLevel, MarketRecord, OrderBookSnapshot
 from .signal import SignalConfig, SignalEngine
 from .storage import MadawcStorage
 
-logger = logging.getLogger("korlic-factory")
+logger = logging.getLogger("madawc-factory")
 
 
 @dataclass

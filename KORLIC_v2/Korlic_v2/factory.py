@@ -18,6 +18,7 @@ from .bot import KorlicBot, KorlicConfig
 from .config import (
     KORLIC_CLOB_HOST,
     KORLIC_CLOB_MIN_INTERVAL_SECONDS,
+    KORLIC_CYCLE_STEP_SLEEP_SECONDS,
     KORLIC_GAMMA_BASE_URL,
     KORLIC_GAMMA_FAMILY_PREFIX,
     KORLIC_GAMMA_MAX_PAGES,
@@ -246,6 +247,7 @@ def build_bot(db_path: str) -> KorlicBot:
         config=KorlicConfig(
             watch_window_seconds=KORLIC_MARKET_NEAR_EXPIRY_SECONDS,
             max_trades_per_market=KORLIC_MAX_TRADES_PER_MARKET,
+            cycle_step_sleep_seconds=KORLIC_CYCLE_STEP_SLEEP_SECONDS,
         ),
         signal_engine=SignalEngine(
             SignalConfig(

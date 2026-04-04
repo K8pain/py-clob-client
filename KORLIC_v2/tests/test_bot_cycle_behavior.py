@@ -205,3 +205,43 @@ def test_run_cycle_filters_markets_beyond_near_expiry_window() -> None:
 
     opened_events = [event for event in storage.events if event.event_type == "PSEUDO_ORDER_OPENED"]
     assert opened_events == []
+
+
+def test_run_cycle_applies_step_sleep_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    now = datetime.now(timezone.utc)
+    market = MarketRecord(
+        market_id="m-1",
+        event_id="e-1",
+        question="BTC up or down",
+        slug="btc-updown-5m",
+        token_ids=("tok-1",),
+        end_time=now + timedelta(minutes=2),
+        active=True,
+        closed=False,
+        accepting_orders=True,
+        enable_order_book=True,
+    )
+    orderbook = OrderBookSnapshot(
+        token_id="tok-1",
+        bids=(BookLevel(price=0.59, size=30.0),),
+        asks=(BookLevel(price=0.59, size=30.0),),
+        ts_ms=0,
+    )
+    storage = InMemoryStorage()
+    bot = KorlicBot(
+        gamma=StubGamma([[market]]),
+        clob=StubClob(server_times_ms=[int(now.timestamp() * 1000)], orderbook=orderbook),
+        ws=StubWs(),
+        storage=storage,  # type: ignore[arg-type]
+        config=KorlicConfig(cycle_step_sleep_seconds=0.01),
+    )
+    sleeps: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr("Korlic_v2.bot.asyncio.sleep", fake_sleep)
+
+    asyncio.run(bot.run_cycle())
+
+    assert sleeps

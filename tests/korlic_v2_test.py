@@ -467,6 +467,7 @@ def test_business_pnl_table_contains_aggregated_fields(tmp_path: Path):
         tokens_evaluated=18,
         trades_taken_cycle=3,
         cumulative_trades=11,
+        run_trades=11,
         pending_positions=6,
         settled_total=5,
         settled_this_cycle=2,
@@ -482,6 +483,8 @@ def test_business_pnl_table_contains_aggregated_fields(tmp_path: Path):
     assert "cash_available" in table
     assert "-10.0000" in table
     assert "trades_total" in table
+    assert "win_rate_percent" in table
+    assert "62.50%" in table
     assert "nearest_pending_expiration_utc" in table
 
 

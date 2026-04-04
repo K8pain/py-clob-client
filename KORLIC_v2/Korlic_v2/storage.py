@@ -165,11 +165,13 @@ class KorlicStorage:
             wins = conn.execute("SELECT COUNT(*) FROM pseudo_trades WHERE result_class IN ('WIN', 'WON')").fetchone()[0]
             losses = conn.execute("SELECT COUNT(*) FROM pseudo_trades WHERE result_class IN ('LOSS', 'LOST')").fetchone()[0]
             open_positions = conn.execute("SELECT COUNT(*) FROM pseudo_trades WHERE result_class='OPEN'").fetchone()[0]
+        settled = int(wins) + int(losses)
         return {
             "total_trades": int(total),
             "won_trades": int(wins),
             "lost_trades": int(losses),
             "open_trades": int(open_positions),
+            "win_rate_percent": (float(wins) / float(settled) * 100.0) if settled else 0.0,
             "net_pnl": float(net_pnl),
         }
 
@@ -187,10 +189,12 @@ class KorlicStorage:
                 "SELECT COUNT(*) FROM pseudo_trades WHERE run_id = ? AND result_class IN ('LOSS', 'LOST')",
                 (run_id,),
             ).fetchone()[0]
+        settled = int(wins) + int(losses)
         return {
             "total_trades": int(total),
             "won_trades": int(wins),
             "lost_trades": int(losses),
+            "win_rate_percent": (float(wins) / float(settled) * 100.0) if settled else 0.0,
             "net_pnl": float(net_pnl),
         }
 
@@ -350,6 +354,7 @@ class KorlicStorage:
             "wins": wins,
             "losses": losses,
             "win_rate": (wins / total) if total else 0.0,
+            "win_rate_percent": (wins / total * 100.0) if total else 0.0,
             "gross_pnl": gross_pnl,
             "net_pnl": net_pnl,
             "average_roi_percent": avg_roi,

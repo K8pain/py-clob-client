@@ -26,7 +26,11 @@ def test_run_all_runs_loop_without_run_once_option(monkeypatch, tmp_path: Path):
     class DummyBot:
         pass
 
-    monkeypatch.setattr("Korlic_v2.launcher._setup_logger", lambda *_, **__: object())
+    class DummyLogger:
+        def info(self, *_args, **_kwargs):
+            return None
+
+    monkeypatch.setattr("Korlic_v2.launcher._setup_logger", lambda *_, **__: DummyLogger())
     monkeypatch.setattr("Korlic_v2.launcher._load_bot", lambda *_, **__: DummyBot())
 
     async def fake_run_once(*_, **__):
@@ -54,6 +58,49 @@ def test_run_all_runs_loop_without_run_once_option(monkeypatch, tmp_path: Path):
     assert rc == 0
     assert called["run_once"] == 0
     assert called["loop"] == 1
+
+
+def test_run_all_resets_state_when_flag_enabled(monkeypatch, tmp_path: Path):
+    class DummyStorage:
+        def __init__(self) -> None:
+            self.reset_calls = 0
+
+        def reset_runtime_and_history(self) -> None:
+            self.reset_calls += 1
+
+    class DummyBot:
+        def __init__(self) -> None:
+            self.storage = DummyStorage()
+
+    class DummyLogger:
+        def info(self, *_args, **_kwargs):
+            return None
+
+    bot = DummyBot()
+    monkeypatch.setattr("Korlic_v2.launcher._setup_logger", lambda *_, **__: DummyLogger())
+    monkeypatch.setattr("Korlic_v2.launcher._load_bot", lambda *_, **__: bot)
+    monkeypatch.setattr("Korlic_v2.launcher.KORLIC_RESET_STATE_ON_START", True)
+
+    async def fake_run_loop(*_, **__):
+        return None
+
+    monkeypatch.setattr("Korlic_v2.launcher._run_loop_with_trade_log", fake_run_loop)
+
+    args = argparse.Namespace(
+        db_path=str(tmp_path / "db.sqlite"),
+        log_file=str(tmp_path / "launcher.log"),
+        output_dir=str(tmp_path / "reports"),
+        lines=5,
+        factory="Korlic_v2.factory:build_bot",
+        trades_log_file=str(tmp_path / "trades.log"),
+        interval_seconds=60.0,
+        aggregate_log_file=str(tmp_path / "cycle_aggregates.jsonl"),
+        log_level="INFO",
+    )
+
+    rc = _run_all(args)
+    assert rc == 0
+    assert bot.storage.reset_calls == 1
 
 
 def test_setup_logger_accepts_info_level_and_wires_business_logger(tmp_path: Path):

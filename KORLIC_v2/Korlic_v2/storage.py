@@ -159,6 +159,12 @@ class KorlicStorage:
             return None
         return json.loads(row[0])
 
+    def reset_runtime_and_history(self) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM state")
+            conn.execute("DELETE FROM events")
+            conn.execute("DELETE FROM pseudo_trades")
+
     def trade_counters(self) -> dict[str, float | int]:
         with self._connect() as conn:
             total, net_pnl = conn.execute("SELECT COUNT(*), COALESCE(SUM(net_pnl), 0) FROM pseudo_trades").fetchone()

@@ -19,6 +19,14 @@ DEFAULT_SIGNAL_ENTRY_SECONDS = 600
 DEFAULT_SIGNAL_MIN_DEPTH = 10.0
 DEFAULT_SIGNAL_MIN_SIZE = 5.0
 DEFAULT_SIGNAL_MAX_STAKE = 25.0
+DEFAULT_RESET_STATE_ON_START = False
+
+
+def _parse_bool_env(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 # Configuración final: defaults + override por variables de entorno.
 KORLIC_GAMMA_BASE_URL = os.getenv("KORLIC_GAMMA_BASE_URL", DEFAULT_GAMMA_BASE_URL)
@@ -41,3 +49,4 @@ KORLIC_SIGNAL_ENTRY_SECONDS = int(os.getenv("KORLIC_SIGNAL_ENTRY_SECONDS", str(D
 KORLIC_SIGNAL_MIN_DEPTH = float(os.getenv("KORLIC_SIGNAL_MIN_DEPTH", str(DEFAULT_SIGNAL_MIN_DEPTH)))
 KORLIC_SIGNAL_MIN_SIZE = float(os.getenv("KORLIC_SIGNAL_MIN_SIZE", str(DEFAULT_SIGNAL_MIN_SIZE)))
 KORLIC_SIGNAL_MAX_STAKE = float(os.getenv("KORLIC_SIGNAL_MAX_STAKE", str(DEFAULT_SIGNAL_MAX_STAKE)))
+KORLIC_RESET_STATE_ON_START = _parse_bool_env("KORLIC_RESET_STATE_ON_START", DEFAULT_RESET_STATE_ON_START)

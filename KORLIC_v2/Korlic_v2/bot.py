@@ -55,7 +55,7 @@ class WsClient(Protocol):
 
 @dataclass
 class KorlicConfig:
-    watch_window_seconds: int = 600
+    watch_window_seconds: int = 900
     retry_max: int = 4
     retry_base_ms: int = 100
     retry_jitter_ms: int = 250

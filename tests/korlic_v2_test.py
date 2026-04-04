@@ -64,6 +64,17 @@ def test_setup_logger_accepts_info_level_and_wires_business_logger(tmp_path: Pat
     assert logger.name == "korlic-launcher"
 
 
+def test_reset_db_if_configured_removes_existing_sqlite(tmp_path: Path):
+    from Korlic_v2.launcher import _reset_db_if_configured
+
+    db_path = tmp_path / "korlic.sqlite"
+    db_path.write_text("placeholder", encoding="utf-8")
+
+    deleted = _reset_db_if_configured(db_path, reset_on_start=True)
+    assert deleted is True
+    assert not db_path.exists()
+
+
 def test_append_cycle_aggregate_log_writes_json_line(tmp_path: Path):
     from Korlic_v2.launcher import _append_cycle_aggregate_log
 

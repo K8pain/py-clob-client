@@ -10,7 +10,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "KORLIC_v2"))
 
-from Korlic_v2.bot import KorlicBot
+from Korlic_v2.bot import KorlicBot, KorlicConfig
 from Korlic_v2.factory import PublicGammaClient, _extract_market_status, _extract_resolution, _to_market_record
 from Korlic_v2.launcher import _run_all
 from Korlic_v2.models import BookLevel, ClassificationStatus, ClassifiedMarket, Ledger, MarketRecord, OrderBookSnapshot, PaperPosition, SignalCandidate
@@ -234,6 +234,42 @@ def test_bot_evaluates_non_crypto_operable_markets(tmp_path: Path):
             "SELECT COUNT(*) FROM events WHERE market_id='m1' AND event_type IN ('SIGNAL_DETECTED', 'NO_TRADE')"
         ).fetchone()[0]
     assert rows > 0
+
+
+def test_bot_limits_trades_per_market_to_one(tmp_path: Path):
+    market = MarketRecord(
+        market_id="m-limit",
+        event_id="e-limit",
+        question="Will BTC close above X?",
+        slug="btc-updown-5m-limit",
+        token_ids=("yes", "no"),
+        end_time=datetime.now(timezone.utc) + timedelta(seconds=50),
+        active=True,
+        closed=False,
+        accepting_orders=True,
+        enable_order_book=True,
+        tags=("crypto",),
+        category="crypto",
+        cadence_hint="5m",
+    )
+    books = {
+        "yes": OrderBookSnapshot(token_id="yes", bids=(), asks=(BookLevel(0.95, 20.0),), ts_ms=1),
+        "no": OrderBookSnapshot(token_id="no", bids=(), asks=(BookLevel(0.95, 20.0),), ts_ms=1),
+    }
+    storage = KorlicStorage(str(tmp_path / "korlic.sqlite"))
+    bot = KorlicBot(
+        gamma=DummyGamma([market]),
+        clob=DummyClob(books),
+        ws=DummyWs(),
+        storage=storage,
+        config=KorlicConfig(max_trades_per_market=1),
+    )
+
+    asyncio.run(bot.run_cycle())
+
+    with sqlite3.connect(storage.db_path) as conn:
+        opened_orders = conn.execute("SELECT COUNT(*) FROM events WHERE event_type='PSEUDO_ORDER_OPENED'").fetchone()[0]
+    assert opened_orders == 1
 
 
 def test_signal_uses_per_trade_budget_instead_of_full_cash():

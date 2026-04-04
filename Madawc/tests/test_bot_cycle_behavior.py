@@ -55,15 +55,20 @@ class StubGamma:
 
 
 class StubClob:
-    def __init__(self, server_times_ms: list[int], orderbook: OrderBookSnapshot) -> None:
+    def __init__(self, server_times_ms: list[int], orderbook: OrderBookSnapshot | list[OrderBookSnapshot]) -> None:
         self._server_times_ms = server_times_ms
-        self._orderbook = orderbook
+        if isinstance(orderbook, list):
+            self._orderbook_sequence = list(orderbook)
+        else:
+            self._orderbook_sequence = [orderbook]
 
     async def get_server_time_ms(self) -> int:
         return self._server_times_ms.pop(0)
 
     async def get_orderbook(self, token_id: str) -> OrderBookSnapshot:  # noqa: ARG002
-        return self._orderbook
+        if len(self._orderbook_sequence) > 1:
+            return self._orderbook_sequence.pop(0)
+        return self._orderbook_sequence[0]
 
     async def get_market_resolution(self, market_id: str) -> tuple[bool, str | None]:  # noqa: ARG002
         return False, None
@@ -244,6 +249,54 @@ def test_run_cycle_applies_step_sleep_when_configured(monkeypatch: pytest.Monkey
     asyncio.run(bot.run_cycle())
 
     assert sleeps
+
+
+def test_run_cycle_fills_open_order_in_next_cycle_from_orderbook_watch() -> None:
+    now = datetime.now(timezone.utc)
+    market = MarketRecord(
+        market_id="m-late-fill",
+        event_id="e-late-fill",
+        question="BTC up or down",
+        slug="btc-updown-5m",
+        token_ids=("tok-late-fill",),
+        end_time=now + timedelta(minutes=2),
+        active=True,
+        closed=False,
+        accepting_orders=True,
+        enable_order_book=True,
+    )
+    book_without_fill = OrderBookSnapshot(
+        token_id="tok-late-fill",
+        bids=(BookLevel(price=0.59, size=30.0),),
+        asks=(BookLevel(price=0.59, size=30.0),),
+        ts_ms=0,
+    )
+    book_with_fill = OrderBookSnapshot(
+        token_id="tok-late-fill",
+        bids=(BookLevel(price=0.04, size=30.0),),
+        asks=(BookLevel(price=0.05, size=30.0),),
+        ts_ms=1,
+    )
+    storage = InMemoryStorage()
+    bot = MadawcBot(
+        gamma=StubGamma([[market], [market]]),
+        clob=StubClob(
+            server_times_ms=[int(now.timestamp() * 1000), int(now.timestamp() * 1000) + 1_000],
+            orderbook=[book_without_fill, book_with_fill],
+        ),
+        ws=StubWs(),
+        storage=storage,  # type: ignore[arg-type]
+    )
+
+    asyncio.run(bot.run_cycle())
+    asyncio.run(bot.run_cycle())
+
+    watched_fill_events = [
+        event
+        for event in storage.events
+        if event.reason_code == "visible_depth_match_open_order_watch" and event.event_type == "PSEUDO_ORDER_FILLED"
+    ]
+    assert len(watched_fill_events) == 1
 
 
 def test_run_cycle_skips_markets_by_configured_prefix() -> None:

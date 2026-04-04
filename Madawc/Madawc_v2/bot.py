@@ -16,9 +16,11 @@ from .discovery import DiscoveryEngine, DiscoveryState, MarketClassifier
 from .models import (
     ClassificationStatus,
     ClassifiedMarket,
+    FillReport,
     Ledger,
     MarketRecord,
     OrderBookSnapshot,
+    OrderStatus,
     PaperOrder,
     PaperPosition,
     PositionStatus,
@@ -218,6 +220,8 @@ class MadawcBot:
             "orders_filled": 0,
             "orders_partial": 0,
             "orders_expired": 0,
+            "orders_filled_from_open_book_watch": 0,
+            "orders_partial_from_open_book_watch": 0,
             "trades_taken": 0,
         }
         trades_taken_per_market: dict[str, int] = {}
@@ -233,6 +237,7 @@ class MadawcBot:
                 )
                 continue
             logger.debug("cycle.market.evaluate market_id=%s", market.market.market_id)
+            orderbook_cache: dict[str, OrderBookSnapshot] = {}
             for token_id in market.market.token_ids:
                 market_id = market.market.market_id
                 market_trade_count = trades_taken_per_market.get(market_id, 0)
@@ -246,10 +251,25 @@ class MadawcBot:
                     )
                     continue
                 end_epoch_ms = int(market.market.end_time.timestamp() * 1000)
-                book = await self._retry(lambda tid=token_id: self.clob.get_orderbook(tid), "degraded_clob_rest")
+                book = orderbook_cache.get(token_id)
+                if book is None:
+                    book = await self._retry(lambda tid=token_id: self.clob.get_orderbook(tid), "degraded_clob_rest")
+                    if book is not None:
+                        orderbook_cache[token_id] = book
                 if book is None:
                     logger.debug("cycle.token.skip market_id=%s token_id=%s reason=missing_orderbook", market.market.market_id, token_id)
                     continue
+                watch_report = self._try_fill_open_order_from_book_watch(
+                    market=market,
+                    token_id=token_id,
+                    book=book,
+                    started=started,
+                )
+                if watch_report is not None:
+                    if watch_report.state == "PSEUDO_ORDER_FILLED":
+                        execution_stats["orders_filled_from_open_book_watch"] += 1
+                    elif watch_report.state == "PSEUDO_ORDER_PARTIAL_FILL":
+                        execution_stats["orders_partial_from_open_book_watch"] += 1
                 best_bid = max((b.price for b in book.bids), default=None)
                 best_ask = book.best_ask()
                 logger.debug(
@@ -564,13 +584,15 @@ class MadawcBot:
         )
         self.last_logged_cumulative_realized_pnl = cumulative_realized_pnl
         logger.debug(
-            "cycle.trading.summary cycle=%s trades_taken=%s orders_opened=%s orders_filled=%s orders_partial=%s orders_expired=%s settled_this_cycle=%s cumulative_won=%s cumulative_lost=%s cumulative_realized_pnl=%.4f",
+            "cycle.trading.summary cycle=%s trades_taken=%s orders_opened=%s orders_filled=%s orders_partial=%s orders_expired=%s orders_filled_from_open_book_watch=%s orders_partial_from_open_book_watch=%s settled_this_cycle=%s cumulative_won=%s cumulative_lost=%s cumulative_realized_pnl=%.4f",
             self.cycle_number,
             execution_stats["trades_taken"],
             execution_stats["orders_opened"],
             execution_stats["orders_filled"],
             execution_stats["orders_partial"],
             execution_stats["orders_expired"],
+            execution_stats["orders_filled_from_open_book_watch"],
+            execution_stats["orders_partial_from_open_book_watch"],
             settled_count,
             cumulative_won,
             cumulative_lost,
@@ -826,6 +848,46 @@ class MadawcBot:
                 nearest = expected_end
         return nearest.isoformat() if nearest is not None else None
 
+    def _find_open_order(self, market_id: str, token_id: str) -> PaperOrder | None:
+        for order in self.paper.open_orders.values():
+            if order.market_id == market_id and order.token_id == token_id and order.status == OrderStatus.OPEN:
+                return order
+        return None
+
+    def _try_fill_open_order_from_book_watch(
+        self,
+        market: ClassifiedMarket,
+        token_id: str,
+        book: OrderBookSnapshot,
+        started: float,
+    ) -> FillReport | None:
+        open_order = self._find_open_order(market.market.market_id, token_id)
+        if open_order is None:
+            return None
+        filled = self.paper.try_fill(open_order, book)
+        report = self.paper.last_fill_report
+        if filled <= 0 or report is None:
+            return None
+        self._log_decision(
+            market=market,
+            token_id=token_id,
+            event_type=report.state,
+            decision="filled" if report.state == "PSEUDO_ORDER_FILLED" else "partial_fill",
+            reason="visible_depth_match_open_order_watch",
+            started=started,
+            payload={
+                "pseudo_order_id": open_order.paper_order_id,
+                "fill_size": report.fill_size,
+                "average_fill_price": report.average_fill_price,
+                "remaining_size": report.remaining_size,
+                "remaining_reserved_cash": report.remaining_reserved_cash,
+                "requested_size": open_order.requested_size,
+                "filled_size": open_order.filled_size,
+                "reserved_cash": open_order.reserved_cash,
+            },
+        )
+        return report
+
     async def _settle_resolved_positions(self) -> tuple[int, float, int, int]:
         settled_count = 0
         settled_net_pnl = 0.0
@@ -860,6 +922,10 @@ class MadawcBot:
             ) or (False, None)
             if not resolved:
                 continue
+            for order_id, order in self.paper.open_orders.items():
+                if order.market_id != market_id or order.status != OrderStatus.OPEN:
+                    continue
+                self.paper.expire_order(order_id, cancelled=True)
             synthetic_market = ClassifiedMarket(
                 market=MarketRecord(
                     market_id=market_id,

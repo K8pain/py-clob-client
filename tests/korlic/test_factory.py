@@ -124,6 +124,39 @@ def test_public_gamma_client_uses_events_endpoint_and_filters_bitcoin_5m(monkeyp
     assert calls[0] == {"active": "true", "closed": "false", "limit": "100", "offset": "0"}
 
 
+
+
+def test_public_gamma_client_seed_slug_falls_back_to_events_slug_query(monkeypatch):
+    calls: list[tuple[str, dict | None]] = []
+
+    class DummyResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    market_payload = [{"id": "evt-1", "markets": []}]
+
+    def fake_get(url, params=None, timeout=20.0):
+        calls.append((url, params))
+        if url.endswith('/events/slug/btc-updown-5m-1774854300'):
+            raise __import__('httpx').HTTPError('deprecated endpoint')
+        return DummyResponse(market_payload)
+
+    monkeypatch.setattr('Korlic.factory.httpx.get', fake_get)
+
+    client = PublicGammaClient()
+    result = client._fetch_seed_event_markets()
+
+    assert result == []
+    assert calls[0][0].endswith('/events/slug/btc-updown-5m-1774854300')
+    assert calls[1][0].endswith('/events')
+    assert calls[1][1] == {'slug': 'btc-updown-5m-1774854300'}
+
 def test_public_gamma_client_accepts_markets_payload_shape(monkeypatch):
     class DummyResponse:
         def raise_for_status(self):

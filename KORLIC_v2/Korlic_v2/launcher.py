@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable
 
 from .bot import KorlicBot
+from .config import KORLIC_RESET_DB_ON_START
 from .storage import KorlicStorage
 
 
@@ -76,6 +77,13 @@ def _load_bot(factory_ref: str, db_path: Path) -> KorlicBot:
         # Asegura que el bot use el DB path pedido por CLI.
         bot.storage = KorlicStorage(str(db_path))
     return bot
+
+
+def _reset_db_if_configured(db_path: Path, reset_on_start: bool = KORLIC_RESET_DB_ON_START) -> bool:
+    if not reset_on_start or not db_path.exists():
+        return False
+    db_path.unlink()
+    return True
 
 
 async def _run_once(bot: KorlicBot, logger: logging.Logger) -> None:
@@ -279,6 +287,8 @@ def _run_all(args: argparse.Namespace) -> int:
     db_path = Path(args.db_path)
     log_file = Path(args.log_file)
     logger = _setup_logger(log_file, log_level=args.log_level)
+    if _reset_db_if_configured(db_path):
+        logger.info("startup.reset_db enabled=true db_path=%s", db_path)
 
     if args.factory:
         bot = _load_bot(args.factory, db_path)
@@ -415,6 +425,8 @@ def main(argv: list[str] | None = None) -> int:
 
     db_path = Path(args.db_path)
     logger = _setup_logger(Path(args.log_file), log_level=args.log_level)
+    if _reset_db_if_configured(db_path):
+        logger.info("startup.reset_db enabled=true db_path=%s", db_path)
     bot = _load_bot(args.factory, db_path)
 
     asyncio.run(

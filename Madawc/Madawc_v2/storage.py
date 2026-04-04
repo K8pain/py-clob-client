@@ -344,7 +344,7 @@ class MadawcStorage:
         row = {
             "report_timestamp_utc": report_ts,
             "run_id": pseudo_rows[-1]["run_id"] if pseudo_rows else "",
-            "strategy_version": pseudo_rows[-1]["strategy_version"] if pseudo_rows else "korlic-v1",
+            "strategy_version": pseudo_rows[-1]["strategy_version"] if pseudo_rows else "madawc-v1",
             "initial_paper_cash": initial_cash,
             "current_paper_cash": current_cash,
             "total_markets_evaluated": evaluations,

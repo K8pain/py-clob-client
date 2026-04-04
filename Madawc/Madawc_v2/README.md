@@ -85,8 +85,8 @@ python -m Madawc_v2.launcher specs
 # ejecutar 1 ciclo
 python -m Madawc_v2.launcher run-once \
   --factory Madawc_v2.factory:build_bot \
-  --db-path var/korlic/korlic.sqlite \
-  --log-file var/korlic/korlic-launcher.log
+  --db-path var/madawc/madawc.sqlite \
+  --log-file var/madawc/madawc-launcher.log
 
 # ejecutar en loop continuo
 python -m Madawc_v2.launcher run-loop \
@@ -103,7 +103,7 @@ python -m Madawc_v2.launcher events --limit 30
 python -m Madawc_v2.launcher events --event-type SIGNAL_DETECTED --limit 50
 
 # exportar reportes CSV
-python -m Madawc_v2.launcher export-reports --output-dir var/korlic/reports
+python -m Madawc_v2.launcher export-reports --output-dir var/madawc/reports
 ```
 
 ### Contrato del factory

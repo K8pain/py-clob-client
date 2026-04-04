@@ -295,7 +295,7 @@ def _to_market_record(item: dict) -> MarketRecord | None:
     if not token_ids:
         return None
 
-    market_id = str(item.get("id") or item.get("market_id") or item.get("condition_id") or item.get("conditionId") or "")
+    market_id = str(item.get("condition_id") or item.get("conditionId") or item.get("id") or item.get("market_id") or "")
     if not market_id:
         return None
 

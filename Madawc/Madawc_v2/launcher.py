@@ -1,4 +1,4 @@
-"""Punto de entrada en consola para iniciar el bot KORLIC v2."""
+"""Punto de entrada en consola para iniciar el bot MADAWC v2."""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from .bot import KorlicBot
-from .config import KORLIC_LOOP_INTERVAL_SECONDS, KORLIC_RESET_DB_ON_START
-from .storage import KorlicStorage
+from .bot import MadawcBot
+from .config import MADAWC_LOOP_INTERVAL_SECONDS, MADAWC_RESET_DB_ON_START
+from .storage import MadawcStorage
 
 
 DEFAULT_DB_PATH = Path("var/korlic/korlic.sqlite")
@@ -54,7 +54,7 @@ def _setup_logger(log_file: Path, log_level: str = "INFO") -> logging.Logger:
     return logger
 
 
-def _load_bot(factory_ref: str, db_path: Path) -> KorlicBot:
+def _load_bot(factory_ref: str, db_path: Path) -> MadawcBot:
     # Carga dinámica para permitir factories custom vía CLI.
     module_name, sep, attr_name = factory_ref.partition(":")
     if not sep:
@@ -70,23 +70,23 @@ def _load_bot(factory_ref: str, db_path: Path) -> KorlicBot:
     except TypeError:
         bot = factory()
 
-    if not isinstance(bot, KorlicBot):
-        raise TypeError("factory debe retornar KorlicBot")
+    if not isinstance(bot, MadawcBot):
+        raise TypeError("factory debe retornar MadawcBot")
 
     if str(bot.storage.db_path) != str(db_path):
         # Asegura que el bot use el DB path pedido por CLI.
-        bot.storage = KorlicStorage(str(db_path))
+        bot.storage = MadawcStorage(str(db_path))
     return bot
 
 
-def _reset_db_if_configured(db_path: Path, reset_on_start: bool = KORLIC_RESET_DB_ON_START) -> bool:
+def _reset_db_if_configured(db_path: Path, reset_on_start: bool = MADAWC_RESET_DB_ON_START) -> bool:
     if not reset_on_start or not db_path.exists():
         return False
     db_path.unlink()
     return True
 
 
-async def _run_once(bot: KorlicBot, logger: logging.Logger) -> None:
+async def _run_once(bot: MadawcBot, logger: logging.Logger) -> None:
     started = time.perf_counter()
     await bot.run_cycle()
     elapsed = int((time.perf_counter() - started) * 1000)
@@ -140,7 +140,7 @@ def _append_cycle_aggregate_log(
         fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
 
-async def _run_loop(bot: KorlicBot, logger: logging.Logger, interval_seconds: float) -> None:
+async def _run_loop(bot: MadawcBot, logger: logging.Logger, interval_seconds: float) -> None:
     logger.info("loop started interval_seconds=%s", interval_seconds)
     loop_iteration = 0
     while True:
@@ -152,7 +152,7 @@ async def _run_loop(bot: KorlicBot, logger: logging.Logger, interval_seconds: fl
 
 
 async def _run_loop_with_trade_log(
-    bot: KorlicBot,
+    bot: MadawcBot,
     logger: logging.Logger,
     db_path: Path,
     trade_log_file: Path,
@@ -307,7 +307,7 @@ def _run_all(args: argparse.Namespace) -> int:
         )
         return 0
 
-    storage = KorlicStorage(args.db_path)
+    storage = MadawcStorage(args.db_path)
     files = storage.export_csv_reports(args.output_dir)
     print(
         json.dumps(
@@ -328,28 +328,28 @@ def _run_all(args: argparse.Namespace) -> int:
 def _print_specs() -> None:
     lines = [
         "",
-        "=== Korlic launcher | comandos ===",
+        "=== Madawc launcher | comandos ===",
         "1) Run continuo:",
-        "   python -m Korlic_v2.launcher run-loop --factory Korlic_v2.factory:build_bot --interval-seconds 240",
+        "   python -m Madawc_v2.launcher run-loop --factory Madawc_v2.factory:build_bot --interval-seconds 240",
         "2) Ver log (tail -f):",
-        "   python -m Korlic_v2.launcher tail-log --follow",
+        "   python -m Madawc_v2.launcher tail-log --follow",
         "3) Ver señales/órdenes/trades (tail -f):",
-        "   python -m Korlic_v2.launcher tail-trades --follow",
+        "   python -m Madawc_v2.launcher tail-trades --follow",
         "4) Ver eventos persistidos (SQLite):",
-        "   python -m Korlic_v2.launcher events --limit 30",
+        "   python -m Madawc_v2.launcher events --limit 30",
         "5) Exportar reportes CSV:",
-        "   python -m Korlic_v2.launcher export-reports",
+        "   python -m Madawc_v2.launcher export-reports",
         "6) Pipeline MVP desatendido (loop continuo):",
-        "   python -m Korlic_v2.launcher --all --factory Korlic_v2.factory:build_bot",
+        "   python -m Madawc_v2.launcher --all --factory Madawc_v2.factory:build_bot",
         "",
     ]
     print("\n".join(lines))
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Orquestador CLI de Korlic para operación por SSH.")
+    parser = argparse.ArgumentParser(description="Orquestador CLI de Madawc para operación por SSH.")
     parser.add_argument("--all", action="store_true", help="Ejecuta pipeline MVP en loop continuo.")
-    parser.add_argument("--factory", help="Factory 'modulo:funcion' que retorna KorlicBot para --all.")
+    parser.add_argument("--factory", help="Factory 'modulo:funcion' que retorna MadawcBot para --all.")
     parser.add_argument("--db-path", default=str(DEFAULT_DB_PATH))
     parser.add_argument("--log-file", default=str(DEFAULT_LOG_PATH))
     parser.add_argument("--trades-log-file", default=str(DEFAULT_TRADES_LOG_PATH))
@@ -359,7 +359,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--interval-seconds",
         type=float,
-        default=KORLIC_LOOP_INTERVAL_SECONDS,
+        default=MADAWC_LOOP_INTERVAL_SECONDS,
         help="Intervalo para modo continuo.",
     )
     parser.add_argument("-n", "--lines", type=int, default=30, help="Líneas para tail en --all.")
@@ -367,15 +367,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("specs", help="Muestra comandos sugeridos.")
 
-    run_loop = sub.add_parser("run-loop", help="Ejecuta ciclos de Korlic en loop.")
-    run_loop.add_argument("--factory", required=True, help="Factory 'modulo:funcion' que retorna KorlicBot.")
+    run_loop = sub.add_parser("run-loop", help="Ejecuta ciclos de Madawc en loop.")
+    run_loop.add_argument("--factory", required=True, help="Factory 'modulo:funcion' que retorna MadawcBot.")
     run_loop.add_argument("--db-path", default=str(DEFAULT_DB_PATH))
     run_loop.add_argument("--log-file", default=str(DEFAULT_LOG_PATH))
     run_loop.add_argument("--trades-log-file", default=str(DEFAULT_TRADES_LOG_PATH))
     run_loop.add_argument("--output-dir", default=str(DEFAULT_REPORTS_PATH))
     run_loop.add_argument("--aggregate-log-file", default=str(DEFAULT_CYCLE_AGGREGATES_LOG_PATH))
     run_loop.add_argument("--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"), default="INFO")
-    run_loop.add_argument("--interval-seconds", type=float, default=KORLIC_LOOP_INTERVAL_SECONDS)
+    run_loop.add_argument("--interval-seconds", type=float, default=MADAWC_LOOP_INTERVAL_SECONDS)
 
     tail_log = sub.add_parser("tail-log", help="Muestra log del launcher.")
     tail_log.add_argument("--log-file", default=str(DEFAULT_LOG_PATH))
@@ -425,7 +425,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "export-reports":
-        storage = KorlicStorage(args.db_path)
+        storage = MadawcStorage(args.db_path)
         files = storage.export_csv_reports(args.output_dir)
         print(json.dumps(files, indent=2, ensure_ascii=False))
         return 0

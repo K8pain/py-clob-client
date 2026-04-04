@@ -1,4 +1,4 @@
-# Korlic MVP papertrade bot (Polymarket 5m crypto)
+# Madawc MVP papertrade bot (Polymarket 5m crypto)
 
 ## 1) Definición de lo que se construye
 - **Qué es:** un bot 24/7 en Python/Linux para paper trading (sin órdenes reales) en mercados crypto de 5 minutos usando `py-clob-client` como base de integración CLOB.
@@ -11,7 +11,7 @@
   - `SignalCandidate` -> oportunidad de entrada.
   - `PaperOrder` / `PaperPosition` -> ejecución y resultado paper.
   - `Ledger` -> fondos virtuales y holdings.
-  - `KorlicStorage` -> eventos y estado durable.
+  - `MadawcStorage` -> eventos y estado durable.
 
 ## 2) UX/operación
 - Flujo feliz:
@@ -57,7 +57,7 @@
 - Añadir métricas/alertas si se despliega 24/7.
 
 ## 7) Contexto amplio
-- Estado actual: `Korlic_v2.factory:build_bot` ya conecta adapters REST públicos de Gamma + CLOB para discovery y orderbook.
+- Estado actual: `Madawc_v2.factory:build_bot` ya conecta adapters REST públicos de Gamma + CLOB para discovery y orderbook.
 - No requiere API privada para paper mode (no publica órdenes reales).
 - La capa WS sigue como stub saludable por defecto.
 - Extensión futura: ejecución live enchufable sin tocar discovery/watch/signal/persistence.
@@ -68,56 +68,56 @@
   - CLOB: `https://clob.polymarket.com/time` y `.../book`
 - **No necesario:** private key ni API key de CLOB mientras se mantenga paper trading.
 - Variables opcionales:
-  - `KORLIC_GAMMA_BASE_URL` (default `https://gamma-api.polymarket.com`)
-  - `KORLIC_CLOB_HOST` (default `https://clob.polymarket.com`)
-  - `KORLIC_GAMMA_MIN_INTERVAL_SECONDS` (default `0.25`, ~4 req/s)
-  - `KORLIC_CLOB_MIN_INTERVAL_SECONDS` (default `0.05`, ~20 req/s)
-  - `KORLIC_LOOP_INTERVAL_SECONDS` (default `240`, 4 minutos entre ciclos)
+  - `MADAWC_GAMMA_BASE_URL` (default `https://gamma-api.polymarket.com`)
+  - `MADAWC_CLOB_HOST` (default `https://clob.polymarket.com`)
+  - `MADAWC_GAMMA_MIN_INTERVAL_SECONDS` (default `0.25`, ~4 req/s)
+  - `MADAWC_CLOB_MIN_INTERVAL_SECONDS` (default `0.05`, ~20 req/s)
+  - `MADAWC_LOOP_INTERVAL_SECONDS` (default `240`, 4 minutos entre ciclos)
 
 ## 8) Orquestador CLI (operación por terminal/SSH)
-Se añadió `Korlic_v2/launcher.py` para operar Korlic desde CLI de forma conveniente.
+Se añadió `Madawc_v2/launcher.py` para operar Madawc desde CLI de forma conveniente.
 
 ### Comandos
 ```bash
 # ver ayuda operativa
-python -m Korlic_v2.launcher specs
+python -m Madawc_v2.launcher specs
 
 # ejecutar 1 ciclo
-python -m Korlic_v2.launcher run-once \
-  --factory Korlic_v2.factory:build_bot \
+python -m Madawc_v2.launcher run-once \
+  --factory Madawc_v2.factory:build_bot \
   --db-path var/korlic/korlic.sqlite \
   --log-file var/korlic/korlic-launcher.log
 
 # ejecutar en loop continuo
-python -m Korlic_v2.launcher run-loop \
-  --factory Korlic_v2.factory:build_bot \
+python -m Madawc_v2.launcher run-loop \
+  --factory Madawc_v2.factory:build_bot \
   --interval-seconds 240
 
 # tail del log del launcher (equivalente a tail -f)
-python -m Korlic_v2.launcher tail-log --follow
+python -m Madawc_v2.launcher tail-log --follow
 
 # consultar eventos persistidos en SQLite
-python -m Korlic_v2.launcher events --limit 30
+python -m Madawc_v2.launcher events --limit 30
 
 # filtrar por tipo de evento
-python -m Korlic_v2.launcher events --event-type SIGNAL_DETECTED --limit 50
+python -m Madawc_v2.launcher events --event-type SIGNAL_DETECTED --limit 50
 
 # exportar reportes CSV
-python -m Korlic_v2.launcher export-reports --output-dir var/korlic/reports
+python -m Madawc_v2.launcher export-reports --output-dir var/korlic/reports
 ```
 
 ### Contrato del factory
-El launcher espera un `factory` en formato `modulo:funcion` que retorne `KorlicBot`.
+El launcher espera un `factory` en formato `modulo:funcion` que retorne `MadawcBot`.
 Ejemplo:
 
 ```python
-# Korlic_v2/factory.py
-from Korlic_v2.bot import KorlicBot
-from Korlic_v2.storage import KorlicStorage
+# Madawc_v2/factory.py
+from Madawc_v2.bot import MadawcBot
+from Madawc_v2.storage import MadawcStorage
 
 
-def build_bot(db_path: str) -> KorlicBot:
-    storage = KorlicStorage(db_path)
-    # construir gamma/clob/ws reales y retornar KorlicBot(...)
+def build_bot(db_path: str) -> MadawcBot:
+    storage = MadawcStorage(db_path)
+    # construir gamma/clob/ws reales y retornar MadawcBot(...)
     ...
 ```

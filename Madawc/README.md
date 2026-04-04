@@ -2,12 +2,12 @@
 
 ## Operativa (MVP)
 
-- Bot derivado de `KORLIC_v2`, copiado en `Madawc/`.
+- Bot derivado de `Madawc_v2`, copiado en `Madawc/`.
 - En cada mercado **nuevo** elegible, publica **dos limit BUY orders** a **5c (0.05)**:
   - 1 orden para el outcome `UP`.
   - 1 orden para el outcome `DOWN`.
 - Tamaño por orden: **20 shares** (stake de **$1** por orden).
-- No se ejecutan ventas manuales: **solo BUY** y las órdenes no llenadas se dejan expirar localmente (igual que Korlic).
+- No se ejecutan ventas manuales: **solo BUY** y las órdenes no llenadas se dejan expirar localmente (igual que Madawc).
 - Filtro de mercados: solo se opera si el título contiene `Up or Down` usando `ONLY_TRADE_THIS_MARKETS` en `config.py`.
 
 ## 1) Qué estamos construyendo
@@ -24,7 +24,7 @@ Un bot de market making mínimo para mercados binarios tipo “Up or Down”. Es
 
 ## 3) Necesidades técnicas
 
-- Reutiliza la arquitectura de Korlic (discovery, signal, paper execution, storage).
+- Reutiliza la arquitectura de Madawc (discovery, signal, paper execution, storage).
 - Cambios mínimos:
   - precio de entrada fijo en 0.05,
   - stake máximo por trade en 1.0,
@@ -38,7 +38,7 @@ Un bot de market making mínimo para mercados binarios tipo “Up or Down”. Es
 
 ## 5) Plan de trabajo (ejecutado)
 
-1. Copia de `KORLIC_v2` a `Madawc`.
+1. Copia de `Madawc_v2` a `Madawc`.
 2. Documentación de operativa en este README.
 3. Ajuste de config y filtros.
 4. Ajuste de señal para publicar limit fija a 5c por token (sin SELL).
@@ -52,3 +52,23 @@ Un bot de market making mínimo para mercados binarios tipo “Up or Down”. Es
 
 - Versión actual prioriza simplicidad absoluta (MVP).
 - Futuro: separación de posiciones por token dentro de un mismo mercado para settlement totalmente correcto si ambos lados llenan.
+
+
+## Cómo correrlo
+
+Desde la raíz del repo:
+
+```bash
+cd Madawc
+python -m Madawc_v2.launcher run-loop \
+  --factory Madawc_v2.factory:build_bot \
+  --db-path var/madawc/runtime.db \
+  --interval-seconds 240
+```
+
+Para una sola iteración:
+
+```bash
+cd Madawc
+python -m Madawc_v2.launcher run-once --factory Madawc_v2.factory:build_bot
+```

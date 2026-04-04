@@ -12,7 +12,7 @@ from pathlib import Path
 from .models import Ledger, PaperOrder, PaperPosition, StructuredEvent
 
 
-class KorlicStorage:
+class MadawcStorage:
     def __init__(self, db_path: str) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)

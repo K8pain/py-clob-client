@@ -1,4 +1,4 @@
-"""Limpieza manual de estado runtime de KORLIC v2 antes de relanzar."""
+"""Limpieza manual de estado runtime de MADAWC v2 antes de relanzar."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def _remove_reports(path: Path) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Limpia DB, logs y reportes runtime de KORLIC v2")
+    parser = argparse.ArgumentParser(description="Limpia DB, logs y reportes runtime de MADAWC v2")
     parser.add_argument("--db-path", type=Path, default=DEFAULT_DB_PATH)
     parser.add_argument("--launcher-log", type=Path, default=DEFAULT_LOG_PATH)
     parser.add_argument("--trades-log", type=Path, default=DEFAULT_TRADES_LOG_PATH)

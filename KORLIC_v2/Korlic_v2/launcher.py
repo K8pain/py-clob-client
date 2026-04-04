@@ -233,11 +233,13 @@ def _query_trade_counters(db_path: Path) -> dict[str, object]:
         wins = conn.execute("SELECT COUNT(*) FROM pseudo_trades WHERE result_class IN ('WIN', 'WON')").fetchone()[0]
         losses = conn.execute("SELECT COUNT(*) FROM pseudo_trades WHERE result_class IN ('LOSS', 'LOST')").fetchone()[0]
         pushes = conn.execute("SELECT COUNT(*) FROM pseudo_trades WHERE result_class='PUSH'").fetchone()[0]
+    settled = int(wins) + int(losses)
     return {
         "total_trades": total,
         "won_trades": wins,
         "lost_trades": losses,
         "push_trades": pushes,
+        "win_rate_percent": (float(wins) / float(settled) * 100.0) if settled else 0.0,
         "net_pnl": float(net_pnl),
     }
 

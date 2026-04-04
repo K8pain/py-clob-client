@@ -23,6 +23,33 @@ DEFAULT_SIGNAL_MAX_STAKE = 25.0
 DEFAULT_MAX_TRADES_PER_MARKET = 1
 DEFAULT_RESET_DB_ON_START = False
 DEFAULT_CYCLE_STEP_SLEEP_SECONDS = 0.0
+DEFAULT_SKIPPED_MARKET_PREFIXES = (
+    "Bitcoin above",
+    "Counter-Strike",
+    "Ethereum above",
+    "Game 2:",
+    "Game Handicap: SN (-1.5) vs CCG Esports (+1.5)",
+    "Games Total: O/U 2.5",
+    "HYPE Up or Down",
+    "Hyperliquid Up or Down",
+    "LoL: Supernova vs CCG Esports (BO3) - North American Challengers League Regular Season",
+    "LoL: Supernova vs CCG Esports - Game 2 Winner",
+    "Map x: Odd/Even",
+    "Map Handicap:",
+    "Valorant: Akave Esports Black vs MYVRA GC (BO3) - VCT Game Changers Latin America North Playoffs",
+    "Valorant: Akave Esports Black vs MYVRA GC - Map 1 Winner",
+    "Valorant: Akave Esports Black vs MYVRA GC - Map 2 Winner",
+    "Valorant: KRÜ Blaze vs Olimpo Gold (BO3) - VCT Game Changers Latin America South Playoffs",
+    "Valorant: KRÜ Blaze vs Olimpo Gold - Map 2 Winner",
+    "Will Bitcoin dip",
+    "Will Bitcoin reach",
+    "Will Ethereum dip",
+    "Will Ethereum reach",
+    "Will Solana dip",
+    "Will Solana reach",
+    "Will XRP dip",
+    "Will XRP reach",
+)
 
 # Configuración final: defaults + override por variables de entorno.
 KORLIC_GAMMA_BASE_URL = os.getenv("KORLIC_GAMMA_BASE_URL", DEFAULT_GAMMA_BASE_URL)
@@ -50,6 +77,11 @@ KORLIC_CYCLE_STEP_SLEEP_SECONDS = float(
     os.getenv("KORLIC_CYCLE_STEP_SLEEP_SECONDS", str(DEFAULT_CYCLE_STEP_SLEEP_SECONDS))
 )
 KORLIC_LOOP_INTERVAL_SECONDS = float(os.getenv("KORLIC_LOOP_INTERVAL_SECONDS", str(DEFAULT_LOOP_INTERVAL_SECONDS)))
+KORLIC_SKIPPED_MARKET_PREFIXES = tuple(
+    prefix.strip()
+    for prefix in os.getenv("KORLIC_SKIPPED_MARKET_PREFIXES", "\n".join(DEFAULT_SKIPPED_MARKET_PREFIXES)).splitlines()
+    if prefix.strip()
+)
 KORLIC_RESET_DB_ON_START = os.getenv("KORLIC_RESET_DB_ON_START", str(DEFAULT_RESET_DB_ON_START)).strip().lower() in (
     "1",
     "true",

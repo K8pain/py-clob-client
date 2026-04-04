@@ -32,6 +32,7 @@ from .config import (
     KORLIC_SIGNAL_MAX_STAKE,
     KORLIC_SIGNAL_MIN_DEPTH,
     KORLIC_SIGNAL_MIN_SIZE,
+    KORLIC_SKIPPED_MARKET_PREFIXES,
 )
 from .models import BookLevel, MarketRecord, OrderBookSnapshot
 from .signal import SignalConfig, SignalEngine
@@ -248,6 +249,7 @@ def build_bot(db_path: str) -> KorlicBot:
             watch_window_seconds=KORLIC_MARKET_NEAR_EXPIRY_SECONDS,
             max_trades_per_market=KORLIC_MAX_TRADES_PER_MARKET,
             cycle_step_sleep_seconds=KORLIC_CYCLE_STEP_SLEEP_SECONDS,
+            skipped_market_prefixes=KORLIC_SKIPPED_MARKET_PREFIXES,
         ),
         signal_engine=SignalEngine(
             SignalConfig(

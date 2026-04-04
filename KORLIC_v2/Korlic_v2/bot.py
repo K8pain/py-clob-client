@@ -63,6 +63,7 @@ class KorlicConfig:
     order_expiry_seconds: int = 5
     max_trades_per_market: int = 1
     cycle_step_sleep_seconds: float = 0.0
+    skipped_market_prefixes: tuple[str, ...] = ()
 
 
 @dataclass
@@ -122,6 +123,7 @@ class KorlicBot:
             "non_crypto": 0,
             "outside_watch_window": 0,
             "low_confidence": 0,
+            "skipped_market_prefix": 0,
         }
         candidate_pool: list[ClassifiedMarket] = []
         for market in markets:
@@ -136,6 +138,9 @@ class KorlicBot:
             if not market.is_operable:
                 continue
             classified = self.classifier.classify(market)
+            if self._is_skipped_market_by_prefix(market.question):
+                filter_stats["skipped_market_prefix"] += 1
+                continue
             seconds_to_end = self.time_sync.seconds_to(int(market.end_time.timestamp() * 1000))
             if 0 < seconds_to_end <= self.config.watch_window_seconds:
                 near_expiry_operable_markets += 1
@@ -154,7 +159,7 @@ class KorlicBot:
                 )
             )
         logger.debug(
-            "cycle.discovery.filters operable=%s crypto=%s near_expiry_operable=%s watch_window_seconds=%s inactive=%s closed=%s not_accepting_orders=%s orderbook_disabled=%s non_crypto=%s outside_watch_window=%s low_confidence=%s",
+            "cycle.discovery.filters operable=%s crypto=%s near_expiry_operable=%s watch_window_seconds=%s inactive=%s closed=%s not_accepting_orders=%s orderbook_disabled=%s non_crypto=%s outside_watch_window=%s low_confidence=%s skipped_market_prefix=%s",
             operable_markets,
             crypto_markets,
             near_expiry_operable_markets,
@@ -166,6 +171,7 @@ class KorlicBot:
             filter_stats["non_crypto"],
             filter_stats["outside_watch_window"],
             filter_stats["low_confidence"],
+            filter_stats["skipped_market_prefix"],
         )
         if operable_markets == 0:
             sample = [
@@ -588,6 +594,8 @@ class KorlicBot:
         pending_resolution_count: int = 0,
         resolved_waiting_redeem_count: int = 0,
     ) -> str:
+        settled_count = cumulative_won + cumulative_lost
+        win_rate_percent = (cumulative_won / settled_count * 100.0) if settled_count else 0.0
         rows = [
             ("cycle", str(cycle)),
             ("markets_parsed", str(markets_parsed)),
@@ -601,6 +609,7 @@ class KorlicBot:
             ("settled_this_cycle", str(settled_this_cycle)),
             ("cumulative_won", str(cumulative_won)),
             ("cumulative_lost", str(cumulative_lost)),
+            ("win_rate_percent", f"{win_rate_percent:.2f}%"),
             ("cumulative_realized_pnl", f"{cumulative_realized_pnl:.4f}"),
             ("nearest_pending_expiration_utc", nearest_pending_expiration_utc or "n/a"),
             ("pending_resolution_markets", str(pending_resolution_count)),
@@ -613,6 +622,12 @@ class KorlicBot:
         border = f"+-{'-' * key_width}-+-{'-' * val_width}-+"
         body = "\n".join(f"| {key:<{key_width}} | {value:>{val_width}} |" for key, value in rows)
         return f"{border}\n{body}\n{border}"
+
+    def _is_skipped_market_by_prefix(self, market_question: str) -> bool:
+        normalized = (market_question or "").strip().lower()
+        if not normalized:
+            return False
+        return any(normalized.startswith(prefix.strip().lower()) for prefix in self.config.skipped_market_prefixes if prefix.strip())
 
     def _build_trade_lifecycle_snapshot(
         self,

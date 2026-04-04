@@ -213,6 +213,7 @@ class KorlicStorage:
             events = conn.execute("SELECT payload FROM events ORDER BY id").fetchall()
             payloads = [json.loads(item[0]) for item in events]
             runtime_row = conn.execute("SELECT value FROM state WHERE key='runtime'").fetchone()
+        market_metadata_by_id = self._build_market_metadata(payloads)
 
         self._write_csv(
             files["pseudo_trades"],
@@ -247,8 +248,8 @@ class KorlicStorage:
             [
                 {
                     "report_timestamp_utc": report_ts,
-                    "market_slug": "",
-                    "market_title": "",
+                    "market_slug": market_metadata_by_id.get(str(row.get("market_id", "")), {}).get("market_slug", ""),
+                    "market_title": market_metadata_by_id.get(str(row.get("market_id", "")), {}).get("market_title", ""),
                     **row,
                 }
                 for row in pseudo_rows
@@ -362,6 +363,22 @@ class KorlicStorage:
             "average_visible_depth_at_signal": (sum(v for v in avg_depth if isinstance(v, (int, float))) / len(avg_depth)) if avg_depth else 0.0,
         }
         self._write_csv(path, list(row.keys()), [row])
+
+    def _build_market_metadata(self, payloads: list[dict]) -> dict[str, dict[str, str]]:
+        metadata: dict[str, dict[str, str]] = {}
+        for payload in payloads:
+            market_id = str(payload.get("market_id", "")).strip()
+            if not market_id:
+                continue
+            event_payload = payload.get("payload", {})
+            market_slug = str(event_payload.get("market_slug", "")).strip()
+            market_title = str(event_payload.get("market_title", "")).strip()
+            if market_slug or market_title:
+                metadata[market_id] = {
+                    "market_slug": market_slug,
+                    "market_title": market_title,
+                }
+        return metadata
 
     def _write_csv(self, path: str, fieldnames: list[str], rows: list[dict]) -> None:
         out = Path(path)

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable
 
 from .bot import KorlicBot
+from .config import KORLIC_RESET_STATE_ON_START
 from .storage import KorlicStorage
 
 
@@ -282,6 +283,9 @@ def _run_all(args: argparse.Namespace) -> int:
 
     if args.factory:
         bot = _load_bot(args.factory, db_path)
+        if KORLIC_RESET_STATE_ON_START:
+            bot.storage.reset_runtime_and_history()
+            logger.info("startup.reset_state enabled=true")
         asyncio.run(
             _run_loop_with_trade_log(
                 bot=bot,
@@ -416,6 +420,9 @@ def main(argv: list[str] | None = None) -> int:
     db_path = Path(args.db_path)
     logger = _setup_logger(Path(args.log_file), log_level=args.log_level)
     bot = _load_bot(args.factory, db_path)
+    if KORLIC_RESET_STATE_ON_START:
+        bot.storage.reset_runtime_and_history()
+        logger.info("startup.reset_state enabled=true")
 
     asyncio.run(
         _run_loop_with_trade_log(

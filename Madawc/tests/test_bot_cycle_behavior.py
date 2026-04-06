@@ -211,6 +211,53 @@ def test_run_cycle_filters_markets_beyond_near_expiry_window() -> None:
     assert opened_events == []
 
 
+def test_run_cycle_respects_min_operational_depth_without_breaking_order_open_flow() -> None:
+    now = datetime.now(timezone.utc)
+    market = MarketRecord(
+        market_id="m-depth",
+        event_id="e-depth",
+        question="BTC up or down",
+        slug="btc-updown-5m",
+        token_ids=("tok-depth",),
+        end_time=now + timedelta(minutes=2),
+        active=True,
+        closed=False,
+        accepting_orders=True,
+        enable_order_book=True,
+    )
+    low_depth_book = OrderBookSnapshot(
+        token_id="tok-depth",
+        bids=(BookLevel(price=0.04, size=30.0),),
+        asks=(BookLevel(price=0.05, size=2.0),),
+        ts_ms=0,
+    )
+    enough_depth_book = OrderBookSnapshot(
+        token_id="tok-depth",
+        bids=(BookLevel(price=0.04, size=30.0),),
+        asks=(BookLevel(price=0.05, size=30.0),),
+        ts_ms=1,
+    )
+    storage = InMemoryStorage()
+    bot = MadawcBot(
+        gamma=StubGamma([[market], [market]]),
+        clob=StubClob(
+            server_times_ms=[int(now.timestamp() * 1000), int(now.timestamp() * 1000) + 1_000],
+            orderbook=[low_depth_book, enough_depth_book],
+        ),
+        ws=StubWs(),
+        storage=storage,  # type: ignore[arg-type]
+    )
+    bot.signal_engine.config.min_operational_size = 5.0
+
+    asyncio.run(bot.run_cycle())
+    asyncio.run(bot.run_cycle())
+
+    no_trade_events = [event for event in storage.events if event.event_type == "NO_TRADE"]
+    opened_events = [event for event in storage.events if event.event_type == "PSEUDO_ORDER_OPENED"]
+    assert any(event.reason_code == "skipped_insufficient_depth" for event in no_trade_events)
+    assert len(opened_events) == 1
+
+
 def test_run_cycle_applies_step_sleep_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     now = datetime.now(timezone.utc)
     market = MarketRecord(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 
 from .config import (
     DEFAULT_SIGNAL_ENTRY_PRICE,
@@ -43,13 +44,18 @@ class SignalEngine:
         if seconds_to_end > self.config.entry_seconds_threshold:
             return None, "skipped_outside_entry_window"
 
-        # 2) Se publica una limit order fija a 5c sin condicionar al best ask actual.
+        # 2) Liquidez visible mínima al precio objetivo.
+        visible_depth = book.depth_at_or_better(self.config.entry_price)
+        if visible_depth < self.config.min_operational_size:
+            return None, "skipped_insufficient_depth"
+
+        # 3) Se publica una limit order fija a 5c sin condicionar al best ask actual.
         budget_for_trade = self.config.max_stake_per_trade
         size_by_cash = budget_for_trade / self.config.entry_price
         if size_by_cash < self.config.min_order_size:
             return None, "skipped_insufficient_funds"
 
-        # 3) Dedupe estricto: una sola orden por token en cada mercado.
+        # 4) Dedupe estricto: una sola orden por token en cada mercado.
         dedupe_key = f"{market.market.market_id}:{token_id}"
         if dedupe_key in self.dedupe:
             return None, "skipped_duplicate_signal"
@@ -65,3 +71,18 @@ class SignalEngine:
             ),
             "signal_candidate",
         )
+
+
+class SamplingMode(str, Enum):
+    IDLE = "idle"
+    WATCH = "watch"
+    AGGRESSIVE = "aggressive"
+
+
+def sampling_mode(seconds_to_end: int, has_open_limit_order: bool) -> SamplingMode:
+    # Política mínima de muestreo adaptativo basada en proximidad y estado de orden.
+    if has_open_limit_order and seconds_to_end <= 30:
+        return SamplingMode.AGGRESSIVE
+    if seconds_to_end <= 120:
+        return SamplingMode.WATCH
+    return SamplingMode.IDLE

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from .models import (
+    ExitAtFlatReport,
     FillReport,
     Ledger,
     OrderBookSnapshot,
@@ -27,6 +28,7 @@ class PaperExecutionEngine:
     positions: dict[str, PaperPosition] = field(default_factory=dict)
     last_fill_report: FillReport | None = None
     last_settlement_report: SettlementReport | None = None
+    last_exit_at_flat_report: ExitAtFlatReport | None = None
 
     def create_order(self, signal: SignalCandidate) -> PaperOrder | None:
         reserved = signal.price * signal.size
@@ -138,5 +140,38 @@ class PaperExecutionEngine:
             filled_size=pos.size,
             average_fill_price=pos.avg_price,
             partial_fill=False,
+        )
+        return pos
+
+    def close_position_at_price(self, market_id: str, exit_price: float) -> PaperPosition | None:
+        pos = self.positions.get(market_id)
+        if pos is None or pos.status != PositionStatus.OPEN:
+            self.last_exit_at_flat_report = None
+            return None
+
+        gross_payoff = pos.size * exit_price
+        basis = pos.avg_price * pos.size
+        net_pnl = gross_payoff - basis
+        pos.pnl_gross = net_pnl
+        pos.pnl_net = net_pnl
+        pos.return_pct = (net_pnl / basis) if basis else 0.0
+        pos.status = PositionStatus.WON if net_pnl >= 0 else PositionStatus.LOST
+        pos.settled_at_utc = datetime.now(timezone.utc).isoformat()
+        self.ledger.cash_available += gross_payoff
+        self.ledger.holdings[pos.token_id] = max(0.0, self.ledger.holdings.get(pos.token_id, 0.0) - pos.size)
+        if self.ledger.holdings.get(pos.token_id, 0.0) <= 1e-9:
+            self.ledger.holdings.pop(pos.token_id, None)
+
+        opened = datetime.fromisoformat(pos.opened_at_utc)
+        settled = datetime.fromisoformat(pos.settled_at_utc)
+        self.last_exit_at_flat_report = ExitAtFlatReport(
+            market_id=pos.market_id,
+            token_id=pos.token_id,
+            exit_price=exit_price,
+            gross_stake=basis,
+            gross_payoff=gross_payoff,
+            net_pnl=net_pnl,
+            roi_percent=(pos.return_pct or 0.0) * 100.0,
+            holding_duration_seconds=max(0, int((settled - opened).total_seconds())),
         )
         return pos

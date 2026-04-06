@@ -79,6 +79,10 @@ class OrderBookSnapshot:
         # Liquidez visible disponible para compra a precio límite o mejor.
         return sum(level.size for level in self.asks if level.price <= limit_price)
 
+    def bid_depth_at_or_better(self, limit_price: float) -> float:
+        # Liquidez visible disponible para venta a precio límite o mejor.
+        return sum(level.size for level in self.bids if level.price >= limit_price)
+
 
 @dataclass(frozen=True)
 class SignalCandidate:
@@ -183,3 +187,15 @@ class SettlementReport:
     filled_size: float
     average_fill_price: float
     partial_fill: bool
+
+
+@dataclass(frozen=True)
+class ExitAtFlatReport:
+    market_id: str
+    token_id: str
+    exit_price: float
+    gross_stake: float
+    gross_payoff: float
+    net_pnl: float
+    roi_percent: float
+    holding_duration_seconds: int

@@ -9,6 +9,11 @@
 - Tamaño por orden: **20 shares** (stake de **$1** por orden).
 - No se ejecutan ventas manuales: **solo BUY** y las órdenes no llenadas se dejan expirar localmente (igual que Madawc).
 - Filtro de mercados: solo se opera si el título contiene `Up or Down` usando `ONLY_TRADE_THIS_MARKETS` en `config.py`.
+- Salida opcional de posiciones (`EXIT_AT_FLAT`):
+  - `MADAWC_EXIT_AT_FLAT_ENABLED=true` activa una salida temprana de posiciones ya llenadas.
+  - `MADAWC_EXIT_AT_FLAT=<N>` define el múltiplo sobre el precio de entrada para vender (default `10`).
+  - La salida se evalúa como **limit SELL simulada**: si no hay profundidad bid suficiente al target, queda esperando fill.
+  - Ejemplo: entrada a `0.05` y `MADAWC_EXIT_AT_FLAT=10` -> target de salida `0.50` (si hay bid disponible).
 
 ## 1) Qué estamos construyendo
 

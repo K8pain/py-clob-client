@@ -64,6 +64,8 @@ class MadawcConfig:
     strategy_version: str = "madawc-v1"
     order_expiry_seconds: int = 5
     max_trades_per_market: int = 1
+    exit_at_flat_enabled: bool = False
+    exit_at_flat: float = 0.0
     cycle_step_sleep_seconds: float = 0.0
     skipped_market_prefixes: tuple[str, ...] = ()
     only_trade_this_markets: tuple[str, ...] = ()
@@ -270,6 +272,12 @@ class MadawcBot:
                         execution_stats["orders_filled_from_open_book_watch"] += 1
                     elif watch_report.state == "PSEUDO_ORDER_PARTIAL_FILL":
                         execution_stats["orders_partial_from_open_book_watch"] += 1
+                self._try_exit_position_at_flat(
+                    market=market,
+                    token_id=token_id,
+                    book=book,
+                    started=started,
+                )
                 best_bid = max((b.price for b in book.bids), default=None)
                 best_ask = book.best_ask()
                 logger.debug(
@@ -887,6 +895,91 @@ class MadawcBot:
             },
         )
         return report
+
+    def _try_exit_position_at_flat(
+        self,
+        market: ClassifiedMarket,
+        token_id: str,
+        book: OrderBookSnapshot,
+        started: float,
+    ) -> None:
+        if not self.config.exit_at_flat_enabled or self.config.exit_at_flat <= 0:
+            return
+        position = self.paper.positions.get(market.market.market_id)
+        if position is None or position.token_id != token_id or position.status != PositionStatus.OPEN:
+            return
+        best_bid = max((level.price for level in book.bids), default=None)
+        if best_bid is None:
+            return
+        target_price = position.avg_price * self.config.exit_at_flat
+        if best_bid + 1e-9 < target_price:
+            return
+        available_bid_depth = book.bid_depth_at_or_better(target_price)
+        if available_bid_depth + 1e-9 < position.size:
+            self._log_decision(
+                market=market,
+                token_id=token_id,
+                event_type="PAPER_POSITION_EXIT_AT_FLAT_WAITING_FILL",
+                decision="waiting_fill",
+                reason="insufficient_bid_depth_for_exit",
+                started=started,
+                payload={
+                    "exit_at_flat": self.config.exit_at_flat,
+                    "target_price": target_price,
+                    "best_bid": best_bid,
+                    "position_size": position.size,
+                    "available_bid_depth": available_bid_depth,
+                },
+            )
+            return
+        closed = self.paper.close_position_at_price(market.market.market_id, exit_price=best_bid)
+        report = self.paper.last_exit_at_flat_report
+        if closed is None or report is None:
+            return
+        self._log_decision(
+            market=market,
+            token_id=token_id,
+            event_type="PAPER_POSITION_EXITED_AT_FLAT",
+            decision="position_exited",
+            reason="exit_at_flat_target_reached",
+            started=started,
+            payload={
+                "exit_at_flat": self.config.exit_at_flat,
+                "target_price": target_price,
+                "exit_price": report.exit_price,
+                "gross_stake": report.gross_stake,
+                "gross_payoff": report.gross_payoff,
+                "net_pnl": report.net_pnl,
+                "roi_percent": report.roi_percent,
+            },
+        )
+        self.storage.save_pseudo_trade(
+            {
+                "pseudo_trade_id": f"pt-{market.market.market_id}-{token_id}",
+                "pseudo_order_id": f"po-{market.market.market_id}-{token_id}",
+                "run_id": self.run_id,
+                "strategy_version": self.config.strategy_version,
+                "market_id": market.market.market_id,
+                "token_id": token_id,
+                "side": "BUY",
+                "outcome": "EXIT_AT_FLAT",
+                "signal_timestamp_utc": closed.opened_at_utc,
+                "fill_timestamp_utc": closed.opened_at_utc,
+                "settlement_timestamp_utc": closed.settled_at_utc or datetime.now(timezone.utc).isoformat(),
+                "seconds_to_end_at_signal": 0,
+                "signal_price": closed.avg_price,
+                "average_fill_price": closed.avg_price,
+                "requested_size": closed.size,
+                "filled_size": closed.size,
+                "gross_stake": report.gross_stake,
+                "gross_payoff": report.gross_payoff,
+                "net_pnl": report.net_pnl,
+                "roi_percent": report.roi_percent,
+                "result_class": "WIN" if report.net_pnl >= 0 else "LOSS",
+                "trade_duration_seconds": report.holding_duration_seconds,
+                "partial_fill": 0,
+            }
+        )
 
     async def _settle_resolved_positions(self) -> tuple[int, float, int, int]:
         settled_count = 0

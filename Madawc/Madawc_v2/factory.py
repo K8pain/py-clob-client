@@ -19,6 +19,8 @@ from .config import (
     MADAWC_CLOB_HOST,
     MADAWC_CLOB_MIN_INTERVAL_SECONDS,
     MADAWC_CYCLE_STEP_SLEEP_SECONDS,
+    MADAWC_EXIT_AT_FLAT,
+    MADAWC_EXIT_AT_FLAT_ENABLED,
     MADAWC_GAMMA_BASE_URL,
     MADAWC_GAMMA_FAMILY_PREFIX,
     MADAWC_GAMMA_MAX_PAGES,
@@ -249,6 +251,8 @@ def build_bot(db_path: str) -> MadawcBot:
         config=MadawcConfig(
             watch_window_seconds=MADAWC_MARKET_NEAR_EXPIRY_SECONDS,
             max_trades_per_market=MADAWC_MAX_TRADES_PER_MARKET,
+            exit_at_flat_enabled=MADAWC_EXIT_AT_FLAT_ENABLED,
+            exit_at_flat=MADAWC_EXIT_AT_FLAT,
             cycle_step_sleep_seconds=MADAWC_CYCLE_STEP_SLEEP_SECONDS,
             skipped_market_prefixes=MADAWC_SKIPPED_MARKET_PREFIXES,
             only_trade_this_markets=MADAWC_ONLY_TRADE_THIS_MARKETS,

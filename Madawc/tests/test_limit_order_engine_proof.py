@@ -259,3 +259,168 @@ def test_settlement_returns_plus_19_on_win_and_minus_1_on_loss() -> None:
     loss_position = engine.settle_market("m-loss", winner_token_id="tok-other")
     assert loss_position is not None
     assert loss_position.pnl_net == -1.0
+
+
+def test_exit_at_flat_closes_open_position_when_target_price_is_reached() -> None:
+    now = datetime.now(timezone.utc)
+    market = MarketRecord(
+        market_id="m-exit-flat",
+        event_id="e-exit-flat",
+        question="BTC Up or Down 5m",
+        slug="btc-updown-5m-exit-flat",
+        token_ids=("tok-exit-flat",),
+        end_time=now + timedelta(minutes=2),
+        active=True,
+        closed=False,
+        accepting_orders=True,
+        enable_order_book=True,
+    )
+    first_cycle_book = OrderBookSnapshot(
+        token_id="tok-exit-flat",
+        bids=(BookLevel(price=0.04, size=100.0),),
+        asks=(BookLevel(price=0.05, size=100.0),),
+        ts_ms=0,
+    )
+    second_cycle_book = OrderBookSnapshot(
+        token_id="tok-exit-flat",
+        bids=(BookLevel(price=0.50, size=100.0),),
+        asks=(BookLevel(price=0.55, size=100.0),),
+        ts_ms=1,
+    )
+    storage = InMemoryStorage()
+    bot = MadawcBot(
+        gamma=StubGamma([market]),
+        clob=StubClobByToken(
+            now_ms=int(now.timestamp() * 1000),
+            books={"tok-exit-flat": first_cycle_book},
+        ),
+        ws=StubWs(),
+        storage=storage,  # type: ignore[arg-type]
+        config=MadawcConfig(
+            max_trades_per_market=1,
+            only_trade_this_markets=("Up or Down",),
+            exit_at_flat_enabled=True,
+            exit_at_flat=10.0,
+        ),
+    )
+
+    asyncio.run(bot.run_cycle())
+    bot.clob = StubClobByToken(
+        now_ms=int(now.timestamp() * 1000) + 1_000,
+        books={"tok-exit-flat": second_cycle_book},
+    )
+    asyncio.run(bot.run_cycle())
+
+    exited = [event for event in storage.events if event.event_type == "PAPER_POSITION_EXITED_AT_FLAT"]
+    assert len(exited) == 1
+    assert exited[0].payload["exit_price"] == 0.5
+
+
+def test_exit_at_flat_waits_when_bid_depth_is_not_enough() -> None:
+    now = datetime.now(timezone.utc)
+    market = MarketRecord(
+        market_id="m-exit-flat-low-depth",
+        event_id="e-exit-flat-low-depth",
+        question="BTC Up or Down 5m",
+        slug="btc-updown-5m-exit-flat-low-depth",
+        token_ids=("tok-exit-flat-low-depth",),
+        end_time=now + timedelta(minutes=2),
+        active=True,
+        closed=False,
+        accepting_orders=True,
+        enable_order_book=True,
+    )
+    first_cycle_book = OrderBookSnapshot(
+        token_id="tok-exit-flat-low-depth",
+        bids=(BookLevel(price=0.04, size=100.0),),
+        asks=(BookLevel(price=0.05, size=100.0),),
+        ts_ms=0,
+    )
+    second_cycle_book = OrderBookSnapshot(
+        token_id="tok-exit-flat-low-depth",
+        bids=(BookLevel(price=0.50, size=10.0),),
+        asks=(BookLevel(price=0.55, size=100.0),),
+        ts_ms=1,
+    )
+    storage = InMemoryStorage()
+    bot = MadawcBot(
+        gamma=StubGamma([market]),
+        clob=StubClobByToken(
+            now_ms=int(now.timestamp() * 1000),
+            books={"tok-exit-flat-low-depth": first_cycle_book},
+        ),
+        ws=StubWs(),
+        storage=storage,  # type: ignore[arg-type]
+        config=MadawcConfig(
+            max_trades_per_market=1,
+            only_trade_this_markets=("Up or Down",),
+            exit_at_flat_enabled=True,
+            exit_at_flat=10.0,
+        ),
+    )
+
+    asyncio.run(bot.run_cycle())
+    bot.clob = StubClobByToken(
+        now_ms=int(now.timestamp() * 1000) + 1_000,
+        books={"tok-exit-flat-low-depth": second_cycle_book},
+    )
+    asyncio.run(bot.run_cycle())
+
+    waiting_fill = [event for event in storage.events if event.event_type == "PAPER_POSITION_EXIT_AT_FLAT_WAITING_FILL"]
+    exited = [event for event in storage.events if event.event_type == "PAPER_POSITION_EXITED_AT_FLAT"]
+    assert len(waiting_fill) == 1
+    assert len(exited) == 0
+
+
+def test_exit_at_flat_disabled_keeps_previous_behavior() -> None:
+    now = datetime.now(timezone.utc)
+    market = MarketRecord(
+        market_id="m-exit-flat-disabled",
+        event_id="e-exit-flat-disabled",
+        question="BTC Up or Down 5m",
+        slug="btc-updown-5m-exit-flat-disabled",
+        token_ids=("tok-exit-flat-disabled",),
+        end_time=now + timedelta(minutes=2),
+        active=True,
+        closed=False,
+        accepting_orders=True,
+        enable_order_book=True,
+    )
+    first_cycle_book = OrderBookSnapshot(
+        token_id="tok-exit-flat-disabled",
+        bids=(BookLevel(price=0.04, size=100.0),),
+        asks=(BookLevel(price=0.05, size=100.0),),
+        ts_ms=0,
+    )
+    second_cycle_book = OrderBookSnapshot(
+        token_id="tok-exit-flat-disabled",
+        bids=(BookLevel(price=0.50, size=100.0),),
+        asks=(BookLevel(price=0.55, size=100.0),),
+        ts_ms=1,
+    )
+    storage = InMemoryStorage()
+    bot = MadawcBot(
+        gamma=StubGamma([market]),
+        clob=StubClobByToken(
+            now_ms=int(now.timestamp() * 1000),
+            books={"tok-exit-flat-disabled": first_cycle_book},
+        ),
+        ws=StubWs(),
+        storage=storage,  # type: ignore[arg-type]
+        config=MadawcConfig(
+            max_trades_per_market=1,
+            only_trade_this_markets=("Up or Down",),
+            exit_at_flat_enabled=False,
+            exit_at_flat=10.0,
+        ),
+    )
+
+    asyncio.run(bot.run_cycle())
+    bot.clob = StubClobByToken(
+        now_ms=int(now.timestamp() * 1000) + 1_000,
+        books={"tok-exit-flat-disabled": second_cycle_book},
+    )
+    asyncio.run(bot.run_cycle())
+
+    exited = [event for event in storage.events if event.event_type == "PAPER_POSITION_EXITED_AT_FLAT"]
+    assert len(exited) == 0

@@ -4,28 +4,48 @@ from __future__ import annotations
 
 import os
 
+# URL base del API Gamma usado para descubrir mercados.
 DEFAULT_GAMMA_BASE_URL = "https://gamma-api.polymarket.com"
+# URL base del CLOB usado para leer orderbooks y operar.
 DEFAULT_CLOB_HOST = "https://clob.polymarket.com"
+# Espera mínima entre requests a Gamma para evitar rate limit.
 DEFAULT_GAMMA_MIN_INTERVAL_SECONDS = 0.25
+# Espera mínima entre requests al CLOB para evitar rate limit.
 DEFAULT_CLOB_MIN_INTERVAL_SECONDS = 0.05
+# Cantidad máxima de mercados por página en Gamma.
 DEFAULT_GAMMA_PAGE_LIMIT = 100
+# Número máximo de páginas a pedir en Gamma (0 = sin límite manual).
 DEFAULT_GAMMA_MAX_PAGES = 0
+# Evento semilla usado para arrancar discovery incluso con paginación vacía.
 DEFAULT_GAMMA_SEED_EVENT_SLUG = "btc-updown-5m-1774854300"
-DEFAULT_GAMMA_FAMILY_PREFIX = "btc-updown-5m-"
+# Ventana de segundos previa al expiry donde el mercado se considera operable.
 DEFAULT_MARKET_NEAR_EXPIRY_SECONDS = 900
+# Intervalo entre ciclos completos del bot.
 DEFAULT_LOOP_INTERVAL_SECONDS = 240.0
 
+# Precio de entrada esperado para disparar señal.
 DEFAULT_SIGNAL_ENTRY_PRICE = 0.05
+# Segundos a expiry máximos permitidos para entrar.
 DEFAULT_SIGNAL_ENTRY_SECONDS = 600
+# Profundidad mínima del orderbook para considerar entrada.
 DEFAULT_SIGNAL_MIN_DEPTH = 0.0
+# Tamaño mínimo de orden permitido por la estrategia.
 DEFAULT_SIGNAL_MIN_SIZE = 1.0
+# Stake máximo por trade.
 DEFAULT_SIGNAL_MAX_STAKE = 1.0
+# Número máximo de trades por mercado.
 DEFAULT_MAX_TRADES_PER_MARKET = 2
+# Habilita salida temprana cuando PnL está flat.
 DEFAULT_EXIT_AT_FLAT_ENABLED = False
+# Umbral de salida flat (en unidades de PnL de la estrategia).
 DEFAULT_EXIT_AT_FLAT = 10.0
+# Si es True, reinicia la base sqlite al iniciar.
 DEFAULT_RESET_DB_ON_START = False
+# Pausa opcional entre pasos internos de un ciclo.
 DEFAULT_CYCLE_STEP_SLEEP_SECONDS = 0.0
+# Tokens de nombre de mercado permitidos para operar (whitelist).
 DEFAULT_ONLY_TRADE_THIS_MARKETS = ("Up or Down",)
+# Prefijos de mercados que deben ignorarse durante discovery.
 DEFAULT_SKIPPED_MARKET_PREFIXES = (
     "Bitcoin above",
     "Counter-Strike",
@@ -55,46 +75,66 @@ DEFAULT_SKIPPED_MARKET_PREFIXES = (
 )
 
 # Configuración final: defaults + override por variables de entorno.
+# Base URL final de Gamma usada por PublicGammaClient.
 MADAWC_GAMMA_BASE_URL = os.getenv("MADAWC_GAMMA_BASE_URL", DEFAULT_GAMMA_BASE_URL)
+# Base URL final del CLOB.
 MADAWC_CLOB_HOST = os.getenv("MADAWC_CLOB_HOST", DEFAULT_CLOB_HOST)
+# Throttle final para llamadas a Gamma.
 MADAWC_GAMMA_MIN_INTERVAL_SECONDS = float(
     os.getenv("MADAWC_GAMMA_MIN_INTERVAL_SECONDS", str(DEFAULT_GAMMA_MIN_INTERVAL_SECONDS))
 )
+# Throttle final para llamadas al CLOB.
 MADAWC_CLOB_MIN_INTERVAL_SECONDS = float(
     os.getenv("MADAWC_CLOB_MIN_INTERVAL_SECONDS", str(DEFAULT_CLOB_MIN_INTERVAL_SECONDS))
 )
+# Límite final de registros por página de Gamma.
 MADAWC_GAMMA_PAGE_LIMIT = int(os.getenv("MADAWC_GAMMA_PAGE_LIMIT", str(DEFAULT_GAMMA_PAGE_LIMIT)))
+# Tope final de páginas a consultar en Gamma.
 MADAWC_GAMMA_MAX_PAGES = int(os.getenv("MADAWC_GAMMA_MAX_PAGES", str(DEFAULT_GAMMA_MAX_PAGES)))
+# Slug semilla final para bootstrap de discovery en Gamma.
 MADAWC_GAMMA_SEED_EVENT_SLUG = os.getenv("MADAWC_GAMMA_SEED_EVENT_SLUG", DEFAULT_GAMMA_SEED_EVENT_SLUG)
-MADAWC_GAMMA_FAMILY_PREFIX = os.getenv("MADAWC_GAMMA_FAMILY_PREFIX", DEFAULT_GAMMA_FAMILY_PREFIX)
+# Ventana final near-expiry para seleccionar mercados operables.
 MADAWC_MARKET_NEAR_EXPIRY_SECONDS = int(
     os.getenv("MADAWC_MARKET_NEAR_EXPIRY_SECONDS", str(DEFAULT_MARKET_NEAR_EXPIRY_SECONDS))
 )
+# Precio de entrada final.
 MADAWC_SIGNAL_ENTRY_PRICE = float(os.getenv("MADAWC_SIGNAL_ENTRY_PRICE", str(DEFAULT_SIGNAL_ENTRY_PRICE)))
+# Segundos de entrada final.
 MADAWC_SIGNAL_ENTRY_SECONDS = int(os.getenv("MADAWC_SIGNAL_ENTRY_SECONDS", str(DEFAULT_SIGNAL_ENTRY_SECONDS)))
+# Profundidad mínima final.
 MADAWC_SIGNAL_MIN_DEPTH = float(os.getenv("MADAWC_SIGNAL_MIN_DEPTH", str(DEFAULT_SIGNAL_MIN_DEPTH)))
+# Tamaño mínimo final de orden.
 MADAWC_SIGNAL_MIN_SIZE = float(os.getenv("MADAWC_SIGNAL_MIN_SIZE", str(DEFAULT_SIGNAL_MIN_SIZE)))
+# Stake máximo final.
 MADAWC_SIGNAL_MAX_STAKE = float(os.getenv("MADAWC_SIGNAL_MAX_STAKE", str(DEFAULT_SIGNAL_MAX_STAKE)))
+# Máximo de trades final por mercado.
 MADAWC_MAX_TRADES_PER_MARKET = int(os.getenv("MADAWC_MAX_TRADES_PER_MARKET", str(DEFAULT_MAX_TRADES_PER_MARKET)))
+# Bandera final para habilitar exit-at-flat.
 MADAWC_EXIT_AT_FLAT_ENABLED = os.getenv(
     "MADAWC_EXIT_AT_FLAT_ENABLED",
     str(DEFAULT_EXIT_AT_FLAT_ENABLED),
 ).strip().lower() in ("1", "true", "yes", "on")
+# Umbral final de exit-at-flat.
 MADAWC_EXIT_AT_FLAT = float(os.getenv("MADAWC_EXIT_AT_FLAT", str(DEFAULT_EXIT_AT_FLAT)))
+# Pausa final entre pasos del ciclo.
 MADAWC_CYCLE_STEP_SLEEP_SECONDS = float(
     os.getenv("MADAWC_CYCLE_STEP_SLEEP_SECONDS", str(DEFAULT_CYCLE_STEP_SLEEP_SECONDS))
 )
+# Intervalo final entre ciclos completos.
 MADAWC_LOOP_INTERVAL_SECONDS = float(os.getenv("MADAWC_LOOP_INTERVAL_SECONDS", str(DEFAULT_LOOP_INTERVAL_SECONDS)))
+# Lista final de prefijos ignorados.
 MADAWC_SKIPPED_MARKET_PREFIXES = tuple(
     prefix.strip()
     for prefix in os.getenv("MADAWC_SKIPPED_MARKET_PREFIXES", "\n".join(DEFAULT_SKIPPED_MARKET_PREFIXES)).splitlines()
     if prefix.strip()
 )
+# Lista final de mercados habilitados explícitamente.
 MADAWC_ONLY_TRADE_THIS_MARKETS = tuple(
     token.strip()
     for token in os.getenv("ONLY_TRADE_THIS_MARKETS", "\n".join(DEFAULT_ONLY_TRADE_THIS_MARKETS)).splitlines()
     if token.strip()
 )
+# Bandera final para reiniciar DB al inicio.
 MADAWC_RESET_DB_ON_START = os.getenv("MADAWC_RESET_DB_ON_START", str(DEFAULT_RESET_DB_ON_START)).strip().lower() in (
     "1",
     "true",

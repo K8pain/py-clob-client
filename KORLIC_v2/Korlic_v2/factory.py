@@ -20,7 +20,6 @@ from .config import (
     KORLIC_CLOB_MIN_INTERVAL_SECONDS,
     KORLIC_CYCLE_STEP_SLEEP_SECONDS,
     KORLIC_GAMMA_BASE_URL,
-    KORLIC_GAMMA_FAMILY_PREFIX,
     KORLIC_GAMMA_MAX_PAGES,
     KORLIC_GAMMA_MIN_INTERVAL_SECONDS,
     KORLIC_GAMMA_PAGE_LIMIT,
@@ -53,7 +52,6 @@ class PublicGammaClient:
     page_limit: int = 100
     max_pages: int = 0
     seed_event_slug: str = "btc-updown-5m-1774854300"
-    family_slug_prefix: str = "btc-updown-5m-"
     last_fetch_stats: dict[str, int | bool] = field(default_factory=dict)
 
     async def get_active_markets(self) -> list[MarketRecord]:
@@ -240,7 +238,6 @@ def build_bot(db_path: str) -> KorlicBot:
             page_limit=KORLIC_GAMMA_PAGE_LIMIT,
             max_pages=KORLIC_GAMMA_MAX_PAGES,
             seed_event_slug=KORLIC_GAMMA_SEED_EVENT_SLUG,
-            family_slug_prefix=KORLIC_GAMMA_FAMILY_PREFIX,
         ),
         clob=PublicClobClient(host=KORLIC_CLOB_HOST, min_interval_seconds=KORLIC_CLOB_MIN_INTERVAL_SECONDS),
         ws=EmptyWsClient(),
@@ -374,22 +371,6 @@ def _flatten_event_markets(payload_items: object) -> list[dict]:
             continue
         flat_markets.append(item)
     return flat_markets
-
-
-def _is_bitcoin_5m_market(item: dict, family_slug_prefix: str = "btc-updown-5m-") -> bool:
-    text = " ".join(
-        [
-            str(item.get("question") or ""),
-            str(item.get("title") or ""),
-            str(item.get("slug") or item.get("market_slug") or ""),
-        ]
-    ).lower()
-    slug = str(item.get("slug") or item.get("market_slug") or "").lower()
-    if family_slug_prefix and slug.startswith(family_slug_prefix.lower()):
-        return True
-    has_bitcoin = "bitcoin" in text or "btc" in text
-    has_5m = "5m" in text or "5 min" in text or "5min" in text
-    return has_bitcoin and has_5m
 
 
 def _parse_token_ids_from_clob_ids(value: object) -> tuple[str, ...]:

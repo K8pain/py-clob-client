@@ -39,6 +39,8 @@ DEFAULT_MAX_TRADES_PER_MARKET = 1
 DEFAULT_RESET_DB_ON_START = False
 # Pausa opcional entre pasos internos de un ciclo.
 DEFAULT_CYCLE_STEP_SLEEP_SECONDS = 0.0
+# Tokens de nombre de mercado permitidos para operar (whitelist).
+DEFAULT_ONLY_TRADE_THIS_MARKETS = ("Up or Down",)
 # Prefijos de mercados que deben ignorarse durante discovery.
 DEFAULT_SKIPPED_MARKET_PREFIXES = (
     "Bitcoin above",
@@ -114,6 +116,12 @@ KORLIC_SKIPPED_MARKET_PREFIXES = tuple(
     prefix.strip()
     for prefix in os.getenv("KORLIC_SKIPPED_MARKET_PREFIXES", "\n".join(DEFAULT_SKIPPED_MARKET_PREFIXES)).splitlines()
     if prefix.strip()
+)
+# Lista final de mercados habilitados explícitamente.
+KORLIC_ONLY_TRADE_THIS_MARKETS = tuple(
+    token.strip()
+    for token in os.getenv("KORLIC_ONLY_TRADE_THIS_MARKETS", "\n".join(DEFAULT_ONLY_TRADE_THIS_MARKETS)).splitlines()
+    if token.strip()
 )
 # Bandera final para reiniciar DB al inicio.
 KORLIC_RESET_DB_ON_START = os.getenv("KORLIC_RESET_DB_ON_START", str(DEFAULT_RESET_DB_ON_START)).strip().lower() in (

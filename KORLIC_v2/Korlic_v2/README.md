@@ -73,6 +73,7 @@
   - `KORLIC_GAMMA_MIN_INTERVAL_SECONDS` (default `0.25`, ~4 req/s)
   - `KORLIC_CLOB_MIN_INTERVAL_SECONDS` (default `0.05`, ~20 req/s)
   - `KORLIC_LOOP_INTERVAL_SECONDS` (default `240`, 4 minutos entre ciclos)
+  - `KORLIC_ONLY_TRADE_THIS_MARKETS` (default `Up or Down`; lista separada por saltos de línea para whitelist por título)
 
 ## 8) Orquestador CLI (operación por terminal/SSH)
 Se añadió `Korlic_v2/launcher.py` para operar Korlic desde CLI de forma conveniente.

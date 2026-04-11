@@ -293,3 +293,51 @@ def test_run_cycle_skips_markets_by_configured_prefix() -> None:
     opened_events = [event for event in storage.events if event.event_type == "PSEUDO_ORDER_OPENED"]
     assert len(opened_events) == 1
     assert opened_events[0].market_id == "m-ok"
+
+
+def test_run_cycle_skips_markets_not_in_title_whitelist() -> None:
+    now = datetime.now(timezone.utc)
+    filtered_market = MarketRecord(
+        market_id="m-filter",
+        event_id="e-filter",
+        question="Will Team A win?",
+        slug="sports-5m",
+        token_ids=("tok-filter",),
+        end_time=now + timedelta(minutes=2),
+        active=True,
+        closed=False,
+        accepting_orders=True,
+        enable_order_book=True,
+    )
+    allowed_market = MarketRecord(
+        market_id="m-ok",
+        event_id="e-ok",
+        question="BTC Up or Down",
+        slug="btc-updown-5m",
+        token_ids=("tok-ok",),
+        end_time=now + timedelta(minutes=2),
+        active=True,
+        closed=False,
+        accepting_orders=True,
+        enable_order_book=True,
+    )
+    orderbook = OrderBookSnapshot(
+        token_id="tok-ok",
+        bids=(BookLevel(price=0.59, size=30.0),),
+        asks=(BookLevel(price=0.59, size=30.0),),
+        ts_ms=0,
+    )
+    storage = InMemoryStorage()
+    bot = KorlicBot(
+        gamma=StubGamma([[filtered_market, allowed_market]]),
+        clob=StubClob(server_times_ms=[int(now.timestamp() * 1000)], orderbook=orderbook),
+        ws=StubWs(),
+        storage=storage,  # type: ignore[arg-type]
+        config=KorlicConfig(only_trade_this_markets=("Up or Down",)),
+    )
+
+    asyncio.run(bot.run_cycle())
+
+    opened_events = [event for event in storage.events if event.event_type == "PSEUDO_ORDER_OPENED"]
+    assert len(opened_events) == 1
+    assert opened_events[0].market_id == "m-ok"

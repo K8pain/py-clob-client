@@ -66,6 +66,7 @@ class KorlicConfig:
     max_trades_per_market: int = 1
     cycle_step_sleep_seconds: float = 0.0
     skipped_market_prefixes: tuple[str, ...] = ()
+    only_trade_this_markets: tuple[str, ...] = ()
 
 
 @dataclass
@@ -142,6 +143,9 @@ class KorlicBot:
             classified = self.classifier.classify(market)
             if self._is_skipped_market_by_prefix(market.question):
                 filter_stats["skipped_market_prefix"] += 1
+                continue
+            if not self._is_allowed_market_by_title(market.question):
+                filter_stats["non_crypto"] += 1
                 continue
             seconds_to_end = self.time_sync.seconds_to(int(market.end_time.timestamp() * 1000))
             if 0 < seconds_to_end <= self.config.watch_window_seconds:
@@ -650,6 +654,13 @@ class KorlicBot:
         if not normalized:
             return False
         return any(normalized.startswith(prefix.strip().lower()) for prefix in self.config.skipped_market_prefixes if prefix.strip())
+
+    def _is_allowed_market_by_title(self, market_question: str) -> bool:
+        filters = tuple(token for token in self.config.only_trade_this_markets if token.strip())
+        if not filters:
+            return True
+        normalized = (market_question or "").lower()
+        return any(token.lower() in normalized for token in filters)
 
     def _build_trade_lifecycle_snapshot(
         self,

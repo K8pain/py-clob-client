@@ -35,6 +35,8 @@ DEFAULT_SIGNAL_MIN_SIZE = 5.0
 DEFAULT_SIGNAL_MAX_STAKE = 25.0
 # Número máximo de trades por mercado.
 DEFAULT_MAX_TRADES_PER_MARKET = 1
+# Modo de selección de lado del orderbook (0=actual, 1=lado YES/UP, 2=lado NO/DOWN).
+DEFAULT_ORDERBOOK_SIDE_MODE = 0
 # Si es True, reinicia la base sqlite al iniciar.
 DEFAULT_RESET_DB_ON_START = False
 # Pausa opcional entre pasos internos de un ciclo.
@@ -103,6 +105,8 @@ KORLIC_SIGNAL_MIN_SIZE = float(os.getenv("KORLIC_SIGNAL_MIN_SIZE", str(DEFAULT_S
 KORLIC_SIGNAL_MAX_STAKE = float(os.getenv("KORLIC_SIGNAL_MAX_STAKE", str(DEFAULT_SIGNAL_MAX_STAKE)))
 # Máximo de trades final por mercado.
 KORLIC_MAX_TRADES_PER_MARKET = int(os.getenv("KORLIC_MAX_TRADES_PER_MARKET", str(DEFAULT_MAX_TRADES_PER_MARKET)))
+# Modo final de selección de lado del orderbook.
+KORLIC_ORDERBOOK_SIDE_MODE = int(os.getenv("KORLIC_ORDERBOOK_SIDE_MODE", str(DEFAULT_ORDERBOOK_SIDE_MODE)))
 # Pausa final entre pasos del ciclo.
 KORLIC_CYCLE_STEP_SLEEP_SECONDS = float(
     os.getenv("KORLIC_CYCLE_STEP_SLEEP_SECONDS", str(DEFAULT_CYCLE_STEP_SLEEP_SECONDS))

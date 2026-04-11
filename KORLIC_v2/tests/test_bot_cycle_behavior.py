@@ -58,11 +58,13 @@ class StubClob:
     def __init__(self, server_times_ms: list[int], orderbook: OrderBookSnapshot) -> None:
         self._server_times_ms = server_times_ms
         self._orderbook = orderbook
+        self.requested_token_ids: list[str] = []
 
     async def get_server_time_ms(self) -> int:
         return self._server_times_ms.pop(0)
 
     async def get_orderbook(self, token_id: str) -> OrderBookSnapshot:  # noqa: ARG002
+        self.requested_token_ids.append(token_id)
         return self._orderbook
 
     async def get_market_resolution(self, market_id: str) -> tuple[bool, str | None]:  # noqa: ARG002
@@ -293,3 +295,46 @@ def test_run_cycle_skips_markets_by_configured_prefix() -> None:
     opened_events = [event for event in storage.events if event.event_type == "PSEUDO_ORDER_OPENED"]
     assert len(opened_events) == 1
     assert opened_events[0].market_id == "m-ok"
+
+
+@pytest.mark.parametrize(
+    ("side_mode", "expected_token"),
+    [
+        (1, "tok-up"),
+        (2, "tok-down"),
+    ],
+)
+def test_run_cycle_can_force_orderbook_side(side_mode: int, expected_token: str) -> None:
+    now = datetime.now(timezone.utc)
+    market = MarketRecord(
+        market_id="m-side",
+        event_id="e-side",
+        question="BTC up or down",
+        slug="btc-updown-5m",
+        token_ids=("tok-up", "tok-down"),
+        end_time=now + timedelta(minutes=2),
+        active=True,
+        closed=False,
+        accepting_orders=True,
+        enable_order_book=True,
+    )
+    orderbook = OrderBookSnapshot(
+        token_id=expected_token,
+        bids=(BookLevel(price=0.59, size=30.0),),
+        asks=(BookLevel(price=0.59, size=30.0),),
+        ts_ms=0,
+    )
+    storage = InMemoryStorage()
+    clob = StubClob(server_times_ms=[int(now.timestamp() * 1000)], orderbook=orderbook)
+    bot = KorlicBot(
+        gamma=StubGamma([[market]]),
+        clob=clob,
+        ws=StubWs(),
+        storage=storage,  # type: ignore[arg-type]
+        config=KorlicConfig(orderbook_side_mode=side_mode, max_trades_per_market=2),
+    )
+
+    asyncio.run(bot.run_cycle())
+
+    assert clob.requested_token_ids
+    assert set(clob.requested_token_ids) == {expected_token}

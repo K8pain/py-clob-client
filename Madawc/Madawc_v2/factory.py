@@ -29,6 +29,7 @@ from .config import (
     MADAWC_MARKET_NEAR_EXPIRY_SECONDS,
     MADAWC_MAX_TRADES_PER_MARKET,
     MADAWC_ONLY_TRADE_THIS_MARKETS,
+    MADAWC_ORDERBOOK_SIDE_MODE,
     MADAWC_SIGNAL_ENTRY_PRICE,
     MADAWC_SIGNAL_ENTRY_SECONDS,
     MADAWC_SIGNAL_MAX_STAKE,
@@ -248,6 +249,7 @@ def build_bot(db_path: str) -> MadawcBot:
         config=MadawcConfig(
             watch_window_seconds=MADAWC_MARKET_NEAR_EXPIRY_SECONDS,
             max_trades_per_market=MADAWC_MAX_TRADES_PER_MARKET,
+            orderbook_side_mode=MADAWC_ORDERBOOK_SIDE_MODE,
             exit_at_flat_enabled=MADAWC_EXIT_AT_FLAT_ENABLED,
             exit_at_flat=MADAWC_EXIT_AT_FLAT,
             cycle_step_sleep_seconds=MADAWC_CYCLE_STEP_SLEEP_SECONDS,

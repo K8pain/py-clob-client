@@ -62,6 +62,7 @@ class KorlicConfig:
     strategy_version: str = "korlic-v1"
     order_expiry_seconds: int = 5
     max_trades_per_market: int = 1
+    orderbook_side_mode: int = 0
     cycle_step_sleep_seconds: float = 0.0
     skipped_market_prefixes: tuple[str, ...] = ()
 
@@ -194,7 +195,7 @@ class KorlicBot:
         self.universe = self.discovery.refresh_universe(self.universe, fresh)
         watchlist = self._build_watchlist(list(self.universe.markets.values()))
         logger.debug("cycle.watchlist near_expiry_markets=%s", len(watchlist))
-        token_ids = sorted({token for item in watchlist for token in item.market.token_ids})
+        token_ids = sorted({token for item in watchlist for token in self._selected_token_ids(item)})
         await self._ensure_subscription(token_ids)
         await self._step_sleep("subscription")
         logger.debug("cycle.subscription token_ids=%s", len(token_ids))
@@ -229,7 +230,7 @@ class KorlicBot:
                 )
                 continue
             logger.debug("cycle.market.evaluate market_id=%s", market.market.market_id)
-            for token_id in market.market.token_ids:
+            for token_id in self._selected_token_ids(market):
                 market_id = market.market.market_id
                 market_trade_count = (1 if market_id in self.paper.positions else 0) + trades_taken_per_market.get(market_id, 0)
                 if market_trade_count >= self.config.max_trades_per_market:
@@ -799,6 +800,14 @@ class KorlicBot:
             if 0 < seconds_to_end <= self.config.watch_window_seconds:
                 output.append(market)
         return output
+
+    def _selected_token_ids(self, market: ClassifiedMarket) -> tuple[str, ...]:
+        token_ids = market.market.token_ids
+        if self.config.orderbook_side_mode == 1:
+            return token_ids[:1]
+        if self.config.orderbook_side_mode == 2:
+            return token_ids[-1:]
+        return token_ids
 
     def _nearest_pending_expiration_utc(self) -> str | None:
         nearest: datetime | None = None

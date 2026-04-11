@@ -35,6 +35,8 @@ DEFAULT_SIGNAL_MIN_SIZE = 1.0
 DEFAULT_SIGNAL_MAX_STAKE = 1.0
 # Número máximo de trades por mercado.
 DEFAULT_MAX_TRADES_PER_MARKET = 2
+# Modo de selección de lado del orderbook (0=actual, 1=lado YES/UP, 2=lado NO/DOWN).
+DEFAULT_ORDERBOOK_SIDE_MODE = 0
 # Habilita salida temprana cuando PnL está flat.
 DEFAULT_EXIT_AT_FLAT_ENABLED = False
 # Umbral de salida flat (en unidades de PnL de la estrategia).
@@ -109,6 +111,8 @@ MADAWC_SIGNAL_MIN_SIZE = float(os.getenv("MADAWC_SIGNAL_MIN_SIZE", str(DEFAULT_S
 MADAWC_SIGNAL_MAX_STAKE = float(os.getenv("MADAWC_SIGNAL_MAX_STAKE", str(DEFAULT_SIGNAL_MAX_STAKE)))
 # Máximo de trades final por mercado.
 MADAWC_MAX_TRADES_PER_MARKET = int(os.getenv("MADAWC_MAX_TRADES_PER_MARKET", str(DEFAULT_MAX_TRADES_PER_MARKET)))
+# Modo final de selección de lado del orderbook.
+MADAWC_ORDERBOOK_SIDE_MODE = int(os.getenv("MADAWC_ORDERBOOK_SIDE_MODE", str(DEFAULT_ORDERBOOK_SIDE_MODE)))
 # Bandera final para habilitar exit-at-flat.
 MADAWC_EXIT_AT_FLAT_ENABLED = os.getenv(
     "MADAWC_EXIT_AT_FLAT_ENABLED",

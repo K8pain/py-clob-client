@@ -26,6 +26,7 @@ from .config import (
     KORLIC_GAMMA_SEED_EVENT_SLUG,
     KORLIC_MARKET_NEAR_EXPIRY_SECONDS,
     KORLIC_MAX_TRADES_PER_MARKET,
+    KORLIC_ORDERBOOK_SIDE_MODE,
     KORLIC_SIGNAL_ENTRY_PRICE,
     KORLIC_SIGNAL_ENTRY_SECONDS,
     KORLIC_SIGNAL_MAX_STAKE,
@@ -245,6 +246,7 @@ def build_bot(db_path: str) -> KorlicBot:
         config=KorlicConfig(
             watch_window_seconds=KORLIC_MARKET_NEAR_EXPIRY_SECONDS,
             max_trades_per_market=KORLIC_MAX_TRADES_PER_MARKET,
+            orderbook_side_mode=KORLIC_ORDERBOOK_SIDE_MODE,
             cycle_step_sleep_seconds=KORLIC_CYCLE_STEP_SLEEP_SECONDS,
             skipped_market_prefixes=KORLIC_SKIPPED_MARKET_PREFIXES,
         ),

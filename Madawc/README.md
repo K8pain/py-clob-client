@@ -59,9 +59,17 @@ Un bot de market making mínimo para mercados binarios tipo “Up or Down”. Es
 - Futuro: separación de posiciones por token dentro de un mismo mercado para settlement totalmente correcto si ambos lados llenan.
 
 
+## Dependencias rápidas
+
+Si ves errores como `ModuleNotFoundError: No module named "httpx"`, instala dependencias en tu venv desde la raíz del repo:
+
+```bash
+pip install -r requirements.txt
+```
+
 ## Cómo correrlo
 
-Desde la raíz del repo:
+Desde la raíz del repo o desde `Madawc/`:
 
 ```bash
 cd Madawc

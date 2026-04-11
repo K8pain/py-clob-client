@@ -29,6 +29,7 @@ class SignalConfig:
 class SignalEngine:
     config: SignalConfig
     dedupe: set[str] = field(default_factory=set)
+    max_dedupe_entries: int = 4000
 
     def evaluate(
         self,
@@ -61,6 +62,7 @@ class SignalEngine:
             return None, "skipped_duplicate_signal"
 
         self.dedupe.add(dedupe_key)
+        self._trim_dedupe()
         return (
             SignalCandidate(
                 market_id=market.market.market_id,
@@ -71,6 +73,19 @@ class SignalEngine:
             ),
             "signal_candidate",
         )
+
+    def prune_to_active_markets(self, active_market_ids: set[str]) -> None:
+        if not self.dedupe:
+            return
+        self.dedupe = {key for key in self.dedupe if key.split(":", 1)[0] in active_market_ids}
+        self._trim_dedupe()
+
+    def _trim_dedupe(self) -> None:
+        extra = len(self.dedupe) - self.max_dedupe_entries
+        if extra <= 0:
+            return
+        for key in sorted(self.dedupe)[:extra]:
+            self.dedupe.discard(key)
 
 
 class SamplingMode(str, Enum):

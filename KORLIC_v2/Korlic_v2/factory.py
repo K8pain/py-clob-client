@@ -62,10 +62,18 @@ class PublicGammaClient:
         url = f"{self.base_url.rstrip('/')}/events"
         offset = 0
         pages_fetched = 0
-        raw_markets: list[dict] = []
+        records_by_market_id: dict[str, MarketRecord] = {}
+
+        def _collect_records(items: list[dict]) -> None:
+            for item in items:
+                record = _to_market_record(item)
+                if record is None or not record.active or record.closed:
+                    continue
+                records_by_market_id[record.market_id] = record
+
         seed_markets = self._fetch_seed_event_markets()
         if seed_markets:
-            raw_markets.extend(seed_markets)
+            _collect_records(seed_markets)
             logger.debug("gamma.fetch seed_event_markets=%s slug=%s", len(seed_markets), self.seed_event_slug)
 
         page = 1
@@ -106,7 +114,7 @@ class PublicGammaClient:
                 len(page_markets),
                 len(page_active_tradeable),
             )
-            raw_markets.extend(page_active_tradeable)
+            _collect_records(page_active_tradeable)
             if len(page_markets) < self.page_limit:
                 logger.debug(
                     "gamma.fetch page=%s offset=%s reached_last_page=true page_markets=%s page_limit=%s",
@@ -122,25 +130,20 @@ class PublicGammaClient:
         logger.debug(
             "gamma.fetch aggregated pages=%s markets=%s page_limit=%s max_pages=%s final_offset=%s",
             pages_fetched,
-            len(raw_markets),
+            len(records_by_market_id),
             self.page_limit,
             self.max_pages,
             offset,
         )
         self.last_fetch_stats = {
             "pages_fetched": pages_fetched,
-            "markets_raw": len(raw_markets),
+            "markets_raw": len(records_by_market_id),
             "final_offset": offset,
             "page_limit": self.page_limit,
             "max_pages": self.max_pages,
         }
 
-        records: list[MarketRecord] = []
-        for item in raw_markets:
-            # Normaliza payload heterogéneo de Gamma a un modelo interno estable.
-            record = _to_market_record(item)
-            if record is not None and record.active and not record.closed:
-                records.append(record)
+        records = list(records_by_market_id.values())
         logger.debug("gamma.fetch records_normalized=%s", len(records))
         return records
 
@@ -206,7 +209,8 @@ class PublicClobClient:
         ob = await asyncio.to_thread(self._client.get_order_book, token_id)
         bids = tuple(BookLevel(price=float(level.price), size=float(level.size)) for level in (ob.bids or []))
         asks = tuple(BookLevel(price=float(level.price), size=float(level.size)) for level in (ob.asks or []))
-        return OrderBookSnapshot(token_id=token_id, bids=bids, asks=asks, ts_ms=await self.get_server_time_ms())
+        ts_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        return OrderBookSnapshot(token_id=token_id, bids=bids, asks=asks, ts_ms=ts_ms)
 
     async def get_market_resolution(self, market_id: str) -> tuple[bool, str | None]:
         self._rate_limiter.wait_turn()

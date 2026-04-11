@@ -199,6 +199,7 @@ class KorlicBot:
         )
         self.universe = self.discovery.refresh_universe(self.universe, fresh)
         watchlist = self._build_watchlist(list(self.universe.markets.values()))
+        self.signal_engine.prune_to_active_markets({item.market.market_id for item in watchlist})
         logger.debug("cycle.watchlist near_expiry_markets=%s", len(watchlist))
         token_ids = sorted({token for item in watchlist for token in item.market.token_ids})
         await self._ensure_subscription(token_ids)

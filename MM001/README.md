@@ -1,10 +1,12 @@
 # MM001 (MVP) — Market Maker Paper Trading Simulator
 
-MM001 es un simulador **paper trading** orientado a validar una operativa de **market making en mercados binarios** (YES/NO) antes de conectar datos reales o ejecución live.
+MM001 es un motor **paper trading** orientado a validar una operativa de **market making en mercados binarios** (YES/NO), consumiendo orderbook real vía API CLOB.
 
-> Ejecuta así:
+> Ejecuta así (con token IDs reales):
 >
 > ```bash
+> export MM001_YES_TOKEN_ID="<token_yes>"
+> export MM001_NO_TOKEN_ID="<token_no>"
 > python -m MM001.launcher --all --factory MM001.factory:build_bot
 > ```
 
@@ -39,7 +41,7 @@ Así puedes distinguir PnL de **proveer liquidez** versus PnL **direccional resi
 ## 2) Flujo de uso (step by step)
 
 ## Paso 0 — Requisitos
-No requiere APIs privadas ni llaves. Solo Python.
+No requiere llaves privadas (modo público), pero sí token IDs YES/NO para leer book real.
 
 ## Paso 1 — Ejecutar simulación completa
 ```bash
@@ -189,9 +191,8 @@ python -m MM001.launcher --all --factory MM001.factory:build_bot
 
 ## 6) Limitaciones actuales (MVP)
 
-1. Los precios son sintéticos (no conectados a book real).
-2. No hay matching real ni partial fills realistas de microestructura.
-3. `MAX_ABS_INVENTORY` está definido pero no fuerza hard-stop aún.
+1. No hay matching real ni partial fills realistas de microestructura.
+2. `MAX_ABS_INVENTORY` está definido pero no fuerza hard-stop aún.
 
 ---
 

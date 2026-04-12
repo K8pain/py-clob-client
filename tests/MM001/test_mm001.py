@@ -11,16 +11,25 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from MM001 import config
-from MM001.bot import MM001Bot
+from MM001.bot import ClobOrderBookSource, MM001Bot
 from MM001.factory import build_bot
 from MM001.launcher import _load_bot, main
 from MM001.models import BotMetrics, Fill, Inventory, MarketTick
 from MM001.strategy import apply_fill, build_quotes, fee_equivalent, minimum_net_spread, reservation_price
 
 
-def test_factory_build_bot_returns_expected_type() -> None:
+def test_factory_build_bot_returns_expected_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "ORDERBOOK_SOURCE", "simulated")
     bot = build_bot(db_path="ignored.sqlite")
     assert isinstance(bot, MM001Bot)
+
+
+def test_factory_requires_token_ids_in_api_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "ORDERBOOK_SOURCE", "api")
+    monkeypatch.setattr(config, "YES_TOKEN_ID", "")
+    monkeypatch.setattr(config, "NO_TOKEN_ID", "")
+    with pytest.raises(ValueError):
+        build_bot()
 
 
 def test_fee_equivalent_and_minimum_net_spread_floor_behavior() -> None:
@@ -96,6 +105,7 @@ def test_launcher_main_requires_all_flag(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_launcher_main_writes_simulation_summary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "ORDERBOOK_SOURCE", "simulated")
     out_dir = tmp_path / "reports"
     db_path = tmp_path / "bot.sqlite"
     monkeypatch.setattr(
@@ -133,6 +143,7 @@ def test_mm001_statement_coverage_threshold(tmp_path: Path, monkeypatch: pytest.
     tracer = trace.Trace(count=True, trace=False)
 
     def exercise() -> None:
+        monkeypatch.setattr(config, "ORDERBOOK_SOURCE", "simulated")
         inv = Inventory(yes=5.0, no=2.0)
         tick = MarketTick(cycle=1, yes_mid=0.52, no_mid=0.48, spread=0.01)
         q = build_quotes(tick, inv)
@@ -182,6 +193,44 @@ def test_mm001_statement_coverage_threshold(tmp_path: Path, monkeypatch: pytest.
             ],
         )
         main()
+
+        class DummyLevel:
+            def __init__(self, price: float) -> None:
+                self.price = str(price)
+
+        class DummyBook:
+            def __init__(self, bids: list[float], asks: list[float]) -> None:
+                self.bids = [DummyLevel(p) for p in bids]
+                self.asks = [DummyLevel(p) for p in asks]
+
+        class DummyClob:
+            def get_order_book(self, token_id: str):
+                books = {
+                    "yes": DummyBook([0.49], [0.51]),
+                    "no": DummyBook([0.48], [0.52]),
+                    "bid_only": DummyBook([0.5], []),
+                    "ask_only": DummyBook([], [0.5]),
+                    "empty": DummyBook([], []),
+                }
+                return books[token_id]
+
+        source = ClobOrderBookSource(host="https://clob.polymarket.com", yes_token_id="yes", no_token_id="no")
+        source._client = DummyClob()
+        source.next_tick(cycle=1, previous_mid=0.5, rng=__import__("random").Random(1))
+        source._book_mid("bid_only")
+        source._book_mid("ask_only")
+        try:
+            source._book_mid("empty")
+        except ValueError:
+            pass
+
+        monkeypatch.setattr(config, "ORDERBOOK_SOURCE", "api")
+        monkeypatch.setattr(config, "YES_TOKEN_ID", "yes")
+        monkeypatch.setattr(config, "NO_TOKEN_ID", "no")
+        api_bot = build_bot("db.sqlite")
+        api_bot.data_source._client = DummyClob()
+        api_bot.cycles = 2
+        api_bot.run_all(output_dir=tmp_path / "cov_api")
 
     tracer.runfunc(exercise)
     results = tracer.results()

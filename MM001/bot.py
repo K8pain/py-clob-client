@@ -4,10 +4,52 @@ import csv
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Protocol
 
 from . import config
 from .models import BotMetrics, Fill, Inventory, MarketTick
 from .strategy import build_quotes, fee_equivalent
+from py_clob_client.client import ClobClient
+
+
+class MarketDataSource(Protocol):
+    def next_tick(self, cycle: int, previous_mid: float, rng: random.Random) -> MarketTick: ...
+
+
+@dataclass
+class SimulatedOrderBookSource:
+    def next_tick(self, cycle: int, previous_mid: float, rng: random.Random) -> MarketTick:
+        shock = rng.uniform(-config.SIMULATION_VOLATILITY, config.SIMULATION_VOLATILITY)
+        mid = max(0.05, min(0.95, previous_mid + shock))
+        return MarketTick(cycle=cycle, yes_mid=mid, no_mid=1.0 - mid, spread=0.01)
+
+
+@dataclass
+class ClobOrderBookSource:
+    host: str
+    yes_token_id: str
+    no_token_id: str
+
+    def __post_init__(self) -> None:
+        self._client = ClobClient(host=self.host)
+
+    def _book_mid(self, token_id: str) -> float:
+        orderbook = self._client.get_order_book(token_id)
+        best_bid = max((float(level.price) for level in (orderbook.bids or [])), default=None)
+        best_ask = min((float(level.price) for level in (orderbook.asks or [])), default=None)
+        if best_bid is not None and best_ask is not None:
+            return (best_bid + best_ask) / 2.0
+        if best_bid is not None:
+            return best_bid
+        if best_ask is not None:
+            return best_ask
+        raise ValueError(f"orderbook vacío para token {token_id}")
+
+    def next_tick(self, cycle: int, previous_mid: float, rng: random.Random) -> MarketTick:
+        _ = previous_mid, rng
+        yes_mid = self._book_mid(self.yes_token_id)
+        no_mid = self._book_mid(self.no_token_id)
+        return MarketTick(cycle=cycle, yes_mid=yes_mid, no_mid=no_mid, spread=max(0.0, yes_mid + no_mid - 1.0))
 
 
 @dataclass
@@ -15,6 +57,7 @@ class MM001Bot:
     cycles: int = config.SIMULATION_CYCLES
     inventory: Inventory = field(default_factory=Inventory)
     metrics: BotMetrics = field(default_factory=BotMetrics)
+    data_source: MarketDataSource = field(default_factory=SimulatedOrderBookSource)
 
     def run_all(self, output_dir: Path) -> dict[str, float]:
         rng = random.Random(config.SIMULATION_RANDOM_SEED)
@@ -25,12 +68,11 @@ class MM001Bot:
             writer.writerow(["cycle", "yes_mid", "no_mid", "yes_bid", "yes_ask", "no_bid", "no_ask", "net_yes"])
             mid = config.SIMULATION_BASE_PRICE
             for cycle in range(1, self.cycles + 1):
-                shock = rng.uniform(-config.SIMULATION_VOLATILITY, config.SIMULATION_VOLATILITY)
-                mid = max(0.05, min(0.95, mid + shock))
-                tick = MarketTick(cycle=cycle, yes_mid=mid, no_mid=1.0 - mid, spread=0.01)
+                tick = self.data_source.next_tick(cycle=cycle, previous_mid=mid, rng=rng)
+                mid = tick.yes_mid
                 quotes = build_quotes(tick, self.inventory)
                 self._simulate_fill_and_pnl(tick, quotes, rng)
-                writer.writerow([cycle, round(mid, 6), round(1.0 - mid, 6), round(quotes.yes_bid, 6), round(quotes.yes_ask, 6), round(quotes.no_bid, 6), round(quotes.no_ask, 6), round(self.inventory.net_yes, 6)])
+                writer.writerow([cycle, round(tick.yes_mid, 6), round(tick.no_mid, 6), round(quotes.yes_bid, 6), round(quotes.yes_ask, 6), round(quotes.no_bid, 6), round(quotes.no_ask, 6), round(self.inventory.net_yes, 6)])
 
         self.metrics.directional_mtm = self.inventory.net_yes * (mid - config.SIMULATION_BASE_PRICE)
         return {

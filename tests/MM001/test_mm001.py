@@ -13,7 +13,14 @@ if str(REPO_ROOT) not in sys.path:
 from MM001 import config
 from MM001.bot import ClobOrderBookSource, MM001Bot
 from MM001.factory import build_bot
-from MM001.launcher import _append_cycle_aggregate_log, _append_trades_log, _load_bot, _setup_logger, main
+from MM001.launcher import (
+    _append_cycle_aggregate_log,
+    _append_trades_log,
+    _format_launcher_metrics_table,
+    _load_bot,
+    _setup_logger,
+    main,
+)
 from MM001.models import BotMetrics, Fill, Inventory, MarketTick
 from MM001.strategy import apply_fill, build_quotes, fee_equivalent, minimum_net_spread, reservation_price
 
@@ -85,6 +92,14 @@ def test_bot_run_all_generates_outputs_and_summary_shape(tmp_path: Path) -> None
         "total_realized",
         "net_yes_inventory",
         "taker_trades",
+        "cumulative_realized_pnl_net",
+        "win_rate",
+        "average_pnl_per_cycle",
+        "average_win_pnl",
+        "average_loss_pnl",
+        "fill_count",
+        "current_inventory_state",
+        "largest_inventory_stuck_market",
     }
     assert set(summary.keys()) == expected_keys
 
@@ -142,6 +157,29 @@ def test_launcher_main_writes_simulation_summary(tmp_path: Path, monkeypatch: py
     assert log_file.exists()
     assert trades_log.exists()
     assert aggregate_log.exists()
+    assert "mm001.metrics.table" in log_file.read_text(encoding="utf-8")
+
+
+def test_format_launcher_metrics_table_includes_point9_metrics() -> None:
+    table = _format_launcher_metrics_table(
+        loop_iteration=3,
+        summary={
+            "cumulative_realized_pnl_net": 12.34,
+            "win_rate": 0.75,
+            "average_pnl_per_cycle": 1.23,
+            "average_win_pnl": 2.34,
+            "average_loss_pnl": -0.45,
+            "fill_count": 9,
+            "current_inventory_state": {"unpaired_yes_qty_total": 1.0},
+            "largest_inventory_stuck_market": {"market_id": "SIMULATED_MM001", "unpaired_qty": 1.0},
+        },
+    )
+    assert "cumulative_realized_pnl_net" in table
+    assert "win_rate" in table
+    assert "average_pnl_per_cycle" in table
+    assert "fill_count" in table
+    assert "current_inventory_state" in table
+    assert "largest_inventory_stuck_market" in table
 
 
 def test_mm001_statement_coverage_threshold(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -85,10 +85,22 @@ class MM001Bot:
             )
             mid = config.SIMULATION_BASE_PRICE
             for cycle in range(1, self.cycles + 1):
+                cycle_realized_before = self.metrics.total_realized
                 tick = self.data_source.next_tick(cycle=cycle, previous_mid=mid, rng=rng)
                 mid = tick.yes_mid
                 quotes = build_quotes(tick, self.inventory)
                 taker_trade = self._simulate_fill_and_pnl(tick, quotes, rng)
+                cycle_realized_after = self.metrics.total_realized
+                cycle_realized_delta = cycle_realized_after - cycle_realized_before
+                self.metrics.closed_cycle_count += 1
+                if cycle_realized_delta > 0:
+                    self.metrics.winning_cycle_count += 1
+                    self.metrics.winning_cycle_pnl_sum += cycle_realized_delta
+                elif cycle_realized_delta < 0:
+                    self.metrics.losing_cycle_count += 1
+                    self.metrics.losing_cycle_pnl_sum += cycle_realized_delta
+                else:
+                    self.metrics.breakeven_cycle_count += 1
                 writer.writerow(
                     [
                         cycle,
@@ -109,6 +121,23 @@ class MM001Bot:
                 )
 
         self.metrics.directional_mtm = self.inventory.net_yes * (mid - config.SIMULATION_BASE_PRICE)
+        settled_cycles = self.metrics.winning_cycle_count + self.metrics.losing_cycle_count
+        win_rate = (self.metrics.winning_cycle_count / settled_cycles) if settled_cycles else 0.0
+        average_pnl_per_cycle = self.metrics.total_realized / max(self.metrics.closed_cycle_count, 1)
+        average_win_pnl = (
+            self.metrics.winning_cycle_pnl_sum / self.metrics.winning_cycle_count
+            if self.metrics.winning_cycle_count
+            else 0.0
+        )
+        average_loss_pnl = (
+            self.metrics.losing_cycle_pnl_sum / self.metrics.losing_cycle_count
+            if self.metrics.losing_cycle_count
+            else 0.0
+        )
+        paired_qty_total = min(self.inventory.yes, self.inventory.no)
+        unpaired_yes_qty_total = max(0.0, self.inventory.yes - self.inventory.no)
+        unpaired_no_qty_total = max(0.0, self.inventory.no - self.inventory.yes)
+        largest_unpaired_qty = max(unpaired_yes_qty_total, unpaired_no_qty_total)
         return {
             "spread_pnl": round(self.metrics.spread_pnl, 4),
             "merge_pnl": round(self.metrics.merge_pnl, 4),
@@ -120,12 +149,30 @@ class MM001Bot:
             "total_realized": round(self.metrics.total_realized, 4),
             "net_yes_inventory": round(self.inventory.net_yes, 4),
             "taker_trades": int(self.metrics.taker_trades),
+            "cumulative_realized_pnl_net": round(self.metrics.total_realized, 4),
+            "win_rate": round(win_rate, 4),
+            "average_pnl_per_cycle": round(average_pnl_per_cycle, 4),
+            "average_win_pnl": round(average_win_pnl, 4),
+            "average_loss_pnl": round(average_loss_pnl, 4),
+            "fill_count": int(self.metrics.fill_count),
+            "current_inventory_state": {
+                "cash_free_usdc": round(self.inventory.cash, 4),
+                "paired_qty_total": round(paired_qty_total, 4),
+                "unpaired_yes_qty_total": round(unpaired_yes_qty_total, 4),
+                "unpaired_no_qty_total": round(unpaired_no_qty_total, 4),
+                "open_cycle_count": int(self.metrics.closed_cycle_count),
+            },
+            "largest_inventory_stuck_market": {
+                "market_id": "SIMULATED_MM001" if largest_unpaired_qty > 0 else "n/a",
+                "unpaired_qty": round(largest_unpaired_qty, 4),
+            },
         }
 
     def _simulate_fill_and_pnl(self, tick: MarketTick, quotes, rng: random.Random) -> bool:
         qty = config.SIMULATION_SIZE
         maker_buy = Fill(side="YES", qty=qty, price=quotes.yes_bid, maker=True)
         maker_sell = Fill(side="YES", qty=qty, price=quotes.yes_ask, maker=True)
+        self.metrics.fill_count += 2
 
         self.metrics.spread_pnl += qty * (maker_sell.price - maker_buy.price)
         self.metrics.rebate_income += fee_equivalent(qty, tick.yes_mid, config.FEE_RATE_BPS) * 0.10
@@ -135,6 +182,7 @@ class MM001Bot:
         if rng.random() < config.TAKER_FRACTION:
             took_taker = True
             self.metrics.taker_trades += 1
+            self.metrics.fill_count += 1
             self.metrics.taker_fees += fee_equivalent(qty, tick.yes_mid, config.FEE_RATE_BPS)
 
         if config.ENABLE_PAIR_MERGE:

@@ -14,7 +14,7 @@
 
 | Prioridad | User story | Happy flow | Flujos alternos |
 |---|---|---|---|
-| P0 | Como operador quiero lanzar un comando único para correr toda la simulación. | `python -m MM001.launcher --all --factory MM001.factory:build_bot` genera resultados. | Si falta `--all`, el launcher corta con mensaje explícito. |
+| P0 | Como operador quiero lanzar un comando único para correr toda la simulación. | `python -m mmaker001.MM001.launcher --all --factory mmaker001.MM001.factory:build_bot` genera resultados. | Si falta `--all`, el launcher corta con mensaje explícito. |
 | P0 | Como analista quiero un resumen de PnL por fuente económica. | Se exporta `simulation_summary.json` con breakdown completo. | Si hay edge insuficiente en merge/split, los componentes quedan en 0. |
 | P1 | Como dev quiero trazabilidad por ciclo para revisar inventario y skew. | Se exporta `ticks.csv` con mids, quotes y net inventory. | Si inventario deriva, se refleja en `net_yes`. |
 | P2 | Como PM quiero priorización clara de roadmap. | Este spreadsheet ordena MVP vs siguiente fase. | N/A |

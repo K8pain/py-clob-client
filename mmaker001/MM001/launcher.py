@@ -118,7 +118,7 @@ def _run_iteration(
 def main() -> None:
     parser = argparse.ArgumentParser(description="MM001 launcher")
     parser.add_argument("--all", action="store_true", help="run full MVP simulation flow")
-    parser.add_argument("--factory", default="MM001.factory:build_bot")
+    parser.add_argument("--factory", default="mmaker001.MM001.factory:build_bot")
     parser.add_argument("--db-path", default=str(config.DEFAULT_DB_PATH))
     parser.add_argument("--output-dir", default=str(config.DEFAULT_OUTPUT_DIR))
     parser.add_argument("--log-file", default="var/mm001/mm001-launcher.log")

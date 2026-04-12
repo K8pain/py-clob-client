@@ -1,12 +1,10 @@
 # MM001 (MVP) — Market Maker Paper Trading Simulator
 
-MM001 es un motor **paper trading** orientado a validar una operativa de **market making en mercados binarios** (YES/NO), consumiendo orderbook real vía API CLOB.
+MM001 es un motor **paper trading** orientado a validar una operativa de **market making en mercados binarios** (YES/NO), consumiendo orderbook real vía API CLOB cuando hay token IDs; si no, cae automáticamente en simulación local.
 
-> Ejecuta así (con token IDs reales):
+> Ejecuta así (sin llaves privadas y sin requerir token IDs):
 >
 > ```bash
-> export MM001_YES_TOKEN_ID="<token_yes>"
-> export MM001_NO_TOKEN_ID="<token_no>"
 > python -m MM001.launcher --all --factory MM001.factory:build_bot
 > ```
 

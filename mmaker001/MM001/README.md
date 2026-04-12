@@ -5,7 +5,7 @@ MM001 es un motor **paper trading** orientado a validar una operativa de **marke
 > Ejecuta así (loop continuo para los mercados/token IDs configurados; sin llaves privadas y sin requerir token IDs):
 >
 > ```bash
-> python -m MM001.launcher --all --factory MM001.factory:build_bot
+> python -m mmaker001.MM001.launcher --all --factory mmaker001.MM001.factory:build_bot
 > ```
 
 ---
@@ -43,12 +43,12 @@ No requiere llaves privadas (modo público), pero sí token IDs YES/NO para leer
 
 ## Paso 1 — Ejecutar bot en loop continuo
 ```bash
-python -m MM001.launcher --all --factory MM001.factory:build_bot
+python -m mmaker001.MM001.launcher --all --factory mmaker001.MM001.factory:build_bot
 ```
 
 Para pruebas rápidas (una sola iteración):
 ```bash
-python -m MM001.launcher --all --factory MM001.factory:build_bot --max-runs 1
+python -m mmaker001.MM001.launcher --all --factory mmaker001.MM001.factory:build_bot --max-runs 1
 ```
 
 ## Paso 2 — Revisar salida en consola
@@ -72,7 +72,7 @@ Y logs operativos tipo Madawc:
 - **Resultado neto**: `total_realized` y `total_realized_cum`.
 
 ## Paso 4 — Ajustar configuración
-Todos los parámetros de la versión 3.0 están hardcodeados en `MM001/config.py`.
+Todos los parámetros de la versión 3.0 están hardcodeados en `mmaker001/MM001/config.py`.
 
 ## Paso 5 — Re-ejecutar y comparar
 Repetir corrida después de ajustes para evaluar sensibilidad de resultados.
@@ -81,7 +81,7 @@ Repetir corrida después de ajustes para evaluar sensibilidad de resultados.
 
 ## 3) Parámetros más importantes de configuración (prioridad de tuning)
 
-> Todos viven en `MM001/config.py`.
+> Todos viven en `mmaker001/MM001/config.py`.
 
 ## P0 — Economics core (impacto directo en rentabilidad)
 
@@ -201,7 +201,7 @@ Al final:
 Comandos recomendados:
 ```bash
 pytest -q tests/MM001
-python -m MM001.launcher --all --factory MM001.factory:build_bot
+python -m mmaker001.MM001.launcher --all --factory mmaker001.MM001.factory:build_bot
 ```
 
 ---

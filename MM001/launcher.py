@@ -35,6 +35,30 @@ def _append_cycle_aggregate_log(cycle_log_file: Path, loop_iteration: int, summa
         fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
 
+def _format_launcher_metrics_table(loop_iteration: int, summary: dict[str, float]) -> str:
+    inventory_state = summary.get("current_inventory_state", {}) or {}
+    stuck_market = summary.get("largest_inventory_stuck_market", {}) or {}
+    rows = [
+        ("loop_iteration", str(loop_iteration)),
+        ("cumulative_realized_pnl_net", f"{float(summary.get('cumulative_realized_pnl_net', 0.0)):.4f}"),
+        ("win_rate", f"{float(summary.get('win_rate', 0.0)):.4f}"),
+        ("average_pnl_per_cycle", f"{float(summary.get('average_pnl_per_cycle', 0.0)):.4f}"),
+        ("average_win_pnl", f"{float(summary.get('average_win_pnl', 0.0)):.4f}"),
+        ("average_loss_pnl", f"{float(summary.get('average_loss_pnl', 0.0)):.4f}"),
+        ("fill_count", str(int(summary.get("fill_count", 0)))),
+        ("current_inventory_state", json.dumps(inventory_state, ensure_ascii=False, sort_keys=True)),
+        (
+            "largest_inventory_stuck_market",
+            json.dumps(stuck_market, ensure_ascii=False, sort_keys=True),
+        ),
+    ]
+    key_width = max(len(key) for key, _ in rows)
+    val_width = max(len(value) for _, value in rows)
+    border = f"+-{'-' * key_width}-+-{'-' * val_width}-+"
+    body = "\n".join(f"| {key:<{key_width}} | {value:>{val_width}} |" for key, value in rows)
+    return f"{border}\n{body}\n{border}"
+
+
 def _append_trades_log(output_dir: Path, trades_log_file: Path, loop_iteration: int) -> None:
     ticks_file = output_dir / "ticks.csv"
     if not ticks_file.exists():
@@ -78,6 +102,7 @@ def _run_iteration(
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     _append_trades_log(output_dir, trades_log_file, loop_iteration)
     _append_cycle_aggregate_log(cycle_log_file, loop_iteration, summary)
+    logger.info("mm001.metrics.table\n%s", _format_launcher_metrics_table(loop_iteration, summary))
     logger.info(
         "iteration=%s spread_pnl=%s taker_trades=%s total_realized=%s net_yes_inventory=%s",
         loop_iteration,

@@ -24,12 +24,12 @@ def test_factory_build_bot_returns_expected_type(monkeypatch: pytest.MonkeyPatch
     assert isinstance(bot, MM001Bot)
 
 
-def test_factory_requires_token_ids_in_api_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_factory_falls_back_to_simulated_when_api_ids_are_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "ORDERBOOK_SOURCE", "api")
     monkeypatch.setattr(config, "YES_TOKEN_ID", "")
     monkeypatch.setattr(config, "NO_TOKEN_ID", "")
-    with pytest.raises(ValueError):
-        build_bot()
+    bot = build_bot()
+    assert isinstance(bot, MM001Bot)
 
 
 def test_fee_equivalent_and_minimum_net_spread_floor_behavior() -> None:

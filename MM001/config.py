@@ -1,14 +1,14 @@
-"""Hardcoded configuration for Madawc v3 MVP market-maker paper trading."""
+"""Hardcoded configuration for MM001 MVP market-maker paper trading."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 # Runtime
-BOT_NAME = "Madawc_v3"
-STRATEGY_VERSION = "madawc-v3.0"
-DEFAULT_DB_PATH = Path("var/madawc_v3/madawc_v3.sqlite")
-DEFAULT_OUTPUT_DIR = Path("var/madawc_v3/reports")
+BOT_NAME = "MM001"
+STRATEGY_VERSION = "MM001-1.0"
+DEFAULT_DB_PATH = Path("var/mm001/mm001.sqlite")
+DEFAULT_OUTPUT_DIR = Path("var/mm001/reports")
 
 # MVP simulation controls
 SIMULATION_CYCLES = 120

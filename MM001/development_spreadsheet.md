@@ -1,10 +1,10 @@
-# Madawc_v3 — Development Spreadsheet (MVP Market Maker Paper Trading)
+# MM001 — Development Spreadsheet (MVP Market Maker Paper Trading)
 
 ## 1) Definition (qué se construye)
 
 | Campo | Definición |
 |---|---|
-| Aplicación/feature | `Madawc_v3`: simulador paper trading orientado a market making en mercados binarios (YES/NO), con evaluación detallada de PnL por spread, merge/split, rebates, rewards y riesgo de inventario. |
+| Aplicación/feature | `MM001`: simulador paper trading orientado a market making en mercados binarios (YES/NO), con evaluación detallada de PnL por spread, merge/split, rebates, rewards y riesgo de inventario. |
 | Usuario objetivo | Quant/dev que necesita validar si la estrategia de maker es rentable antes de pasar a live trading. |
 | Problema | Evitar confundir PnL direccional con PnL de provisión de liquidez; medir la economía real del maker en Polymarket-like CLOB. |
 | Funcionamiento | State machine `idle -> quote -> partial_fill -> paired_fill -> merge_or_requote -> inventory_rebalance -> emergency_exit` con simulación multi-ciclo y reporte. |
@@ -14,7 +14,7 @@
 
 | Prioridad | User story | Happy flow | Flujos alternos |
 |---|---|---|---|
-| P0 | Como operador quiero lanzar un comando único para correr toda la simulación. | `python -m Madawc_v3.launcher --all --factory Madawc_v3.factory:build_bot` genera resultados. | Si falta `--all`, el launcher corta con mensaje explícito. |
+| P0 | Como operador quiero lanzar un comando único para correr toda la simulación. | `python -m MM001.launcher --all --factory MM001.factory:build_bot` genera resultados. | Si falta `--all`, el launcher corta con mensaje explícito. |
 | P0 | Como analista quiero un resumen de PnL por fuente económica. | Se exporta `simulation_summary.json` con breakdown completo. | Si hay edge insuficiente en merge/split, los componentes quedan en 0. |
 | P1 | Como dev quiero trazabilidad por ciclo para revisar inventario y skew. | Se exporta `ticks.csv` con mids, quotes y net inventory. | Si inventario deriva, se refleja en `net_yes`. |
 | P2 | Como PM quiero priorización clara de roadmap. | Este spreadsheet ordena MVP vs siguiente fase. | N/A |
@@ -27,7 +27,7 @@
 | Configuración | Todo hardcodeado en `config.py` v3.0. | Migrar a env/flags en v3.1 sin romper contrato. |
 | Algoritmo de quoting | Reservation price con inventory skew y spread mínimo neto dinámico. | Avellaneda-Stoikov calibrado por volatilidad real/tiempo a evento. |
 | PnL engine | Spread + merge + split-sell + fees/rebates/rewards + MTM residual. | Añadir slippage model, latency model, fills parciales realistas. |
-| Persistencia | CSV + JSON de salida en `var/madawc_v3/reports`. | SQLite + event sourcing de decisiones. |
+| Persistencia | CSV + JSON de salida en `var/mm001/reports`. | SQLite + event sourcing de decisiones. |
 | Dependencias | Solo stdlib Python para MVP portable. | Añadir conectores py_clob_client en modo paper real-data. |
 
 ## 4) Testing & security
@@ -36,7 +36,7 @@
 |---|---|---|
 | Smoke CLI | Confirmar comando end-to-end y artefactos. | Implementado (manual). |
 | Regression deterministic | Seed fija para reproducir resultados. | Implementado en `config.py`. |
-| Unit tests | Validar fórmulas (`fee_equivalent`, spread mínimo, reservation skew), launcher y simulación. | Implementado en `tests/madawc_v3`. |
+| Unit tests | Validar fórmulas (`fee_equivalent`, spread mínimo, reservation skew), launcher y simulación. | Implementado en `tests/MM001`. |
 | Coverage gate | Mantener cobertura mínima >85% en módulos core MVP (`bot/strategy/launcher/factory`). | Implementado con test de umbral local sin dependencias externas. |
 | Seguridad | No órdenes live, no llaves privadas, sin side-effects de trading real. | Cumplido en MVP. |
 
@@ -44,17 +44,17 @@
 
 | Pri | Tarea | Estimación | Entregable | DoD |
 |---|---|---:|---|---|
-| P0 | Crear paquete `Madawc_v3` y contrato launcher/factory | 0.5d | Comando `--all` operativo | Corre en local y genera reportes |
+| P0 | Crear paquete `MM001` y contrato launcher/factory | 0.5d | Comando `--all` operativo | Corre en local y genera reportes |
 | P0 | Implementar economics core de market maker | 0.5d | `strategy.py` + `bot.py` con PnL breakdown | `simulation_summary.json` con componentes |
 | P0 | Spreadsheet técnico completo | 0.5d | Este documento | Cobertura 1–7 solicitada |
-| P1 | Tests unitarios y regresión | 0.5d | `tests/madawc_v3/*` | Fórmulas y run determinista verificados |
+| P1 | Tests unitarios y regresión | 0.5d | `tests/MM001/*` | Fórmulas y run determinista verificados |
 | P2 | Integración con datos reales CLOB/Gamma | 1–2d | adapter mode paper-live-data | Sin trading real, con snapshots reales |
 
 ## 6) Ripple effects
 
 | Área externa | Impacto |
 |---|---|
-| Docs operativas | Añadir runbook de Madawc_v3 y comparación contra v2. |
+| Docs operativas | Añadir runbook de MM001 y comparación contra v2. |
 | Comunicación interna | Alinear que v3 prioriza MM economics, no señal direccional. |
 | Observabilidad | Definir dashboard de `total_realized` vs `directional_mtm`. |
 

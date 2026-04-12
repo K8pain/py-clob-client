@@ -1,11 +1,11 @@
-# Madawc_v3 (MVP) — Market Maker Paper Trading Simulator
+# MM001 (MVP) — Market Maker Paper Trading Simulator
 
-Madawc_v3 es un simulador **paper trading** orientado a validar una operativa de **market making en mercados binarios** (YES/NO) antes de conectar datos reales o ejecución live.
+MM001 es un simulador **paper trading** orientado a validar una operativa de **market making en mercados binarios** (YES/NO) antes de conectar datos reales o ejecución live.
 
 > Ejecuta así:
 >
 > ```bash
-> python -m Madawc_v3.launcher --all --factory Madawc_v3.factory:build_bot
+> python -m MM001.launcher --all --factory MM001.factory:build_bot
 > ```
 
 ---
@@ -43,19 +43,19 @@ No requiere APIs privadas ni llaves. Solo Python.
 
 ## Paso 1 — Ejecutar simulación completa
 ```bash
-python -m Madawc_v3.launcher --all --factory Madawc_v3.factory:build_bot
+python -m MM001.launcher --all --factory MM001.factory:build_bot
 ```
 
 ## Paso 2 — Revisar salida en consola
 El launcher imprime un JSON con métricas agregadas.
 
 ## Paso 3 — Revisar artefactos
-Se generan en `var/madawc_v3/reports/`:
+Se generan en `var/mm001/reports/`:
 - `ticks.csv`: trazabilidad ciclo a ciclo (mids, quotes, inventario neto)
 - `simulation_summary.json`: resumen final de PnL por componente
 
 ## Paso 4 — Ajustar configuración
-Todos los parámetros de la versión 3.0 están hardcodeados en `Madawc_v3/config.py`.
+Todos los parámetros de la versión 3.0 están hardcodeados en `MM001/config.py`.
 
 ## Paso 5 — Re-ejecutar y comparar
 Repetir corrida después de ajustes para evaluar sensibilidad de resultados.
@@ -64,7 +64,7 @@ Repetir corrida después de ajustes para evaluar sensibilidad de resultados.
 
 ## 3) Parámetros más importantes de configuración (prioridad de tuning)
 
-> Todos viven en `Madawc_v3/config.py`.
+> Todos viven en `MM001/config.py`.
 
 ## P0 — Economics core (impacto directo en rentabilidad)
 
@@ -134,7 +134,7 @@ Fracción probabilística de salidas con coste taker.
 
 ## 4.1 Launcher y factory
 - `launcher.py` parsea flags, exige `--all`, carga `factory` y ejecuta simulación.
-- `factory.py` retorna `MadawcV3Bot` (contrato simple compatible con launcher).
+- `factory.py` retorna `MM001Bot` (contrato simple compatible con launcher).
 
 ## 4.2 Estado y modelos
 - `Inventory`: posiciones YES/NO + cash
@@ -173,7 +173,7 @@ Al final:
 
 - No envía órdenes reales.
 - No usa credenciales privadas.
-- Suite de tests en `tests/madawc_v3/test_madawc_v3.py` cubre:
+- Suite de tests en `tests/MM001/test_mm001.py` cubre:
   - fórmulas core,
   - launcher,
   - flujo principal,
@@ -181,8 +181,8 @@ Al final:
 
 Comandos recomendados:
 ```bash
-pytest -q tests/madawc_v3
-python -m Madawc_v3.launcher --all --factory Madawc_v3.factory:build_bot
+pytest -q tests/MM001
+python -m MM001.launcher --all --factory MM001.factory:build_bot
 ```
 
 ---

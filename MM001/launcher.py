@@ -6,25 +6,25 @@ import json
 from pathlib import Path
 
 from . import config
-from .bot import MadawcV3Bot
+from .bot import MM001Bot
 
 
-def _load_bot(factory_ref: str, db_path: Path) -> MadawcV3Bot:
+def _load_bot(factory_ref: str, db_path: Path) -> MM001Bot:
     module_name, sep, attr_name = factory_ref.partition(":")
     if not sep:
         raise ValueError("factory debe tener formato modulo:funcion")
     module = importlib.import_module(module_name)
     factory = getattr(module, attr_name)
     bot = factory(db_path=str(db_path))
-    if not isinstance(bot, MadawcV3Bot):
-        raise TypeError("factory debe retornar MadawcV3Bot")
+    if not isinstance(bot, MM001Bot):
+        raise TypeError("factory debe retornar MM001Bot")
     return bot
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Madawc v3 launcher")
+    parser = argparse.ArgumentParser(description="MM001 launcher")
     parser.add_argument("--all", action="store_true", help="run full MVP simulation flow")
-    parser.add_argument("--factory", default="Madawc_v3.factory:build_bot")
+    parser.add_argument("--factory", default="MM001.factory:build_bot")
     parser.add_argument("--db-path", default=str(config.DEFAULT_DB_PATH))
     parser.add_argument("--output-dir", default=str(config.DEFAULT_OUTPUT_DIR))
     args = parser.parse_args()

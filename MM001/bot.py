@@ -11,7 +11,7 @@ from .strategy import build_quotes, fee_equivalent
 
 
 @dataclass
-class MadawcV3Bot:
+class MM001Bot:
     cycles: int = config.SIMULATION_CYCLES
     inventory: Inventory = field(default_factory=Inventory)
     metrics: BotMetrics = field(default_factory=BotMetrics)

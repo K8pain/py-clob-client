@@ -1,12 +1,10 @@
 # MM001 (MVP) — Market Maker Paper Trading Simulator
 
-MM001 es un motor **paper trading** orientado a validar una operativa de **market making en mercados binarios** (YES/NO), consumiendo orderbook real vía API CLOB.
+MM001 es un motor **paper trading** orientado a validar una operativa de **market making en mercados binarios** (YES/NO), consumiendo orderbook real vía API CLOB cuando hay token IDs; si no, cae automáticamente en simulación local.
 
-> Ejecuta así (con token IDs reales):
+> Ejecuta así (loop continuo para los mercados/token IDs configurados; sin llaves privadas y sin requerir token IDs):
 >
 > ```bash
-> export MM001_YES_TOKEN_ID="<token_yes>"
-> export MM001_NO_TOKEN_ID="<token_no>"
 > python -m MM001.launcher --all --factory MM001.factory:build_bot
 > ```
 
@@ -43,9 +41,14 @@ Así puedes distinguir PnL de **proveer liquidez** versus PnL **direccional resi
 ## Paso 0 — Requisitos
 No requiere llaves privadas (modo público), pero sí token IDs YES/NO para leer book real.
 
-## Paso 1 — Ejecutar simulación completa
+## Paso 1 — Ejecutar bot en loop continuo
 ```bash
 python -m MM001.launcher --all --factory MM001.factory:build_bot
+```
+
+Para pruebas rápidas (una sola iteración):
+```bash
+python -m MM001.launcher --all --factory MM001.factory:build_bot --max-runs 1
 ```
 
 ## Paso 2 — Revisar salida en consola
@@ -55,6 +58,18 @@ El launcher imprime un JSON con métricas agregadas.
 Se generan en `var/mm001/reports/`:
 - `ticks.csv`: trazabilidad ciclo a ciclo (mids, quotes, inventario neto)
 - `simulation_summary.json`: resumen final de PnL por componente
+- `cycle_aggregates.jsonl`: snapshot por iteración del loop (timestamp + summary)
+
+Y logs operativos tipo Madawc:
+- `var/mm001/mm001-launcher.log`: estado del loop y métricas clave por iteración
+- `var/mm001/mm001-trades.log`: evolución ciclo a ciclo (mid, inventario neto, taker_trade, PnL acumulado)
+
+### Métricas dinámicas recomendadas (plan operativo)
+- **PnL de spread**: `spread_pnl` y `spread_pnl_cum`.
+- **PnL de full-set**: `merge_pnl` y `split_sell_pnl` (acumulado por ciclo).
+- **Actividad taker**: `taker_trades`, `taker_trade` por ciclo, `taker_fees`.
+- **Inventario**: `net_yes_inventory` final y `net_yes` por ciclo.
+- **Resultado neto**: `total_realized` y `total_realized_cum`.
 
 ## Paso 4 — Ajustar configuración
 Todos los parámetros de la versión 3.0 están hardcodeados en `MM001/config.py`.
@@ -135,7 +150,8 @@ Fracción probabilística de salidas con coste taker.
 ## 4) Funcionamiento detallado (internals)
 
 ## 4.1 Launcher y factory
-- `launcher.py` parsea flags, exige `--all`, carga `factory` y ejecuta simulación.
+- `launcher.py` parsea flags, exige `--all`, carga `factory` y ejecuta simulación en loop continuo (con `--max-runs` opcional para cortar).
+- Añade logging operativo (`--log-file`, `--trades-log-file`, `--aggregate-log-file`, `--log-level`) para seguimiento dinámico estilo Madawc.
 - `factory.py` retorna `MM001Bot` (contrato simple compatible con launcher).
 
 ## 4.2 Estado y modelos
@@ -167,7 +183,8 @@ Por ciclo:
 
 Al final:
 - calcula `directional_mtm` residual,
-- arma `simulation_summary.json`.
+- arma `simulation_summary.json`,
+- incluye `taker_trades` en el resumen.
 
 ---
 

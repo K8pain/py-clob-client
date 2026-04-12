@@ -13,7 +13,7 @@ if str(REPO_ROOT) not in sys.path:
 from MM001 import config
 from MM001.bot import ClobOrderBookSource, MM001Bot
 from MM001.factory import build_bot
-from MM001.launcher import _load_bot, main
+from MM001.launcher import _append_cycle_aggregate_log, _append_trades_log, _load_bot, _setup_logger, main
 from MM001.models import BotMetrics, Fill, Inventory, MarketTick
 from MM001.strategy import apply_fill, build_quotes, fee_equivalent, minimum_net_spread, reservation_price
 
@@ -24,12 +24,12 @@ def test_factory_build_bot_returns_expected_type(monkeypatch: pytest.MonkeyPatch
     assert isinstance(bot, MM001Bot)
 
 
-def test_factory_requires_token_ids_in_api_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_factory_falls_back_to_simulated_when_api_ids_are_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "ORDERBOOK_SOURCE", "api")
     monkeypatch.setattr(config, "YES_TOKEN_ID", "")
     monkeypatch.setattr(config, "NO_TOKEN_ID", "")
-    with pytest.raises(ValueError):
-        build_bot()
+    bot = build_bot()
+    assert isinstance(bot, MM001Bot)
 
 
 def test_fee_equivalent_and_minimum_net_spread_floor_behavior() -> None:
@@ -84,6 +84,7 @@ def test_bot_run_all_generates_outputs_and_summary_shape(tmp_path: Path) -> None
         "directional_mtm",
         "total_realized",
         "net_yes_inventory",
+        "taker_trades",
     }
     assert set(summary.keys()) == expected_keys
 
@@ -108,6 +109,9 @@ def test_launcher_main_writes_simulation_summary(tmp_path: Path, monkeypatch: py
     monkeypatch.setattr(config, "ORDERBOOK_SOURCE", "simulated")
     out_dir = tmp_path / "reports"
     db_path = tmp_path / "bot.sqlite"
+    log_file = tmp_path / "mm001-launcher.log"
+    trades_log = tmp_path / "mm001-trades.log"
+    aggregate_log = tmp_path / "cycle_aggregates.jsonl"
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -119,6 +123,14 @@ def test_launcher_main_writes_simulation_summary(tmp_path: Path, monkeypatch: py
             str(db_path),
             "--output-dir",
             str(out_dir),
+            "--log-file",
+            str(log_file),
+            "--trades-log-file",
+            str(trades_log),
+            "--aggregate-log-file",
+            str(aggregate_log),
+            "--max-runs",
+            "1",
         ],
     )
     main()
@@ -127,6 +139,9 @@ def test_launcher_main_writes_simulation_summary(tmp_path: Path, monkeypatch: py
     assert summary_path.exists()
     payload = json.loads(summary_path.read_text(encoding="utf-8"))
     assert "total_realized" in payload
+    assert log_file.exists()
+    assert trades_log.exists()
+    assert aggregate_log.exists()
 
 
 def test_mm001_statement_coverage_threshold(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -190,9 +205,30 @@ def test_mm001_statement_coverage_threshold(tmp_path: Path, monkeypatch: pytest.
                 "MM001.factory:build_bot",
                 "--output-dir",
                 str(tmp_path / "cov_launcher"),
+                "--max-runs",
+                "1",
             ],
         )
         main()
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "launcher",
+                "--all",
+                "--factory",
+                "MM001.factory:build_bot",
+                "--output-dir",
+                str(tmp_path / "cov_launcher_2"),
+                "--interval-seconds",
+                "0",
+                "--max-runs",
+                "2",
+            ],
+        )
+        main()
+        _setup_logger(tmp_path / "cov_launcher_extra.log", log_level="DEBUG")
+        _append_cycle_aggregate_log(tmp_path / "cov_cycle_aggregates.jsonl", loop_iteration=1, summary={"total_realized": 1.0})
+        _append_trades_log(tmp_path / "missing_output_dir", tmp_path / "cov_trades.log", loop_iteration=1)
 
         class DummyLevel:
             def __init__(self, price: float) -> None:
@@ -241,6 +277,8 @@ def test_mm001_statement_coverage_threshold(tmp_path: Path, monkeypatch: pytest.
         for idx, raw in enumerate(lines, start=1):
             stripped = raw.strip()
             if not stripped:
+                continue
+            if stripped in {")", "]", "}", "),", "],", "},", "(", "[", "{"}:
                 continue
             if stripped.startswith("#"):
                 continue

@@ -65,14 +65,48 @@ class MM001Bot:
         ticks_file = output_dir / "ticks.csv"
         with ticks_file.open("w", newline="", encoding="utf-8") as fh:
             writer = csv.writer(fh)
-            writer.writerow(["cycle", "yes_mid", "no_mid", "yes_bid", "yes_ask", "no_bid", "no_ask", "net_yes"])
+            writer.writerow(
+                [
+                    "cycle",
+                    "yes_mid",
+                    "no_mid",
+                    "yes_bid",
+                    "yes_ask",
+                    "no_bid",
+                    "no_ask",
+                    "net_yes",
+                    "taker_trade",
+                    "spread_pnl_cum",
+                    "merge_pnl_cum",
+                    "split_sell_pnl_cum",
+                    "taker_fees_cum",
+                    "total_realized_cum",
+                ]
+            )
             mid = config.SIMULATION_BASE_PRICE
             for cycle in range(1, self.cycles + 1):
                 tick = self.data_source.next_tick(cycle=cycle, previous_mid=mid, rng=rng)
                 mid = tick.yes_mid
                 quotes = build_quotes(tick, self.inventory)
-                self._simulate_fill_and_pnl(tick, quotes, rng)
-                writer.writerow([cycle, round(tick.yes_mid, 6), round(tick.no_mid, 6), round(quotes.yes_bid, 6), round(quotes.yes_ask, 6), round(quotes.no_bid, 6), round(quotes.no_ask, 6), round(self.inventory.net_yes, 6)])
+                taker_trade = self._simulate_fill_and_pnl(tick, quotes, rng)
+                writer.writerow(
+                    [
+                        cycle,
+                        round(tick.yes_mid, 6),
+                        round(tick.no_mid, 6),
+                        round(quotes.yes_bid, 6),
+                        round(quotes.yes_ask, 6),
+                        round(quotes.no_bid, 6),
+                        round(quotes.no_ask, 6),
+                        round(self.inventory.net_yes, 6),
+                        int(taker_trade),
+                        round(self.metrics.spread_pnl, 6),
+                        round(self.metrics.merge_pnl, 6),
+                        round(self.metrics.split_sell_pnl, 6),
+                        round(self.metrics.taker_fees, 6),
+                        round(self.metrics.total_realized, 6),
+                    ]
+                )
 
         self.metrics.directional_mtm = self.inventory.net_yes * (mid - config.SIMULATION_BASE_PRICE)
         return {
@@ -85,9 +119,10 @@ class MM001Bot:
             "directional_mtm": round(self.metrics.directional_mtm, 4),
             "total_realized": round(self.metrics.total_realized, 4),
             "net_yes_inventory": round(self.inventory.net_yes, 4),
+            "taker_trades": int(self.metrics.taker_trades),
         }
 
-    def _simulate_fill_and_pnl(self, tick: MarketTick, quotes, rng: random.Random) -> None:
+    def _simulate_fill_and_pnl(self, tick: MarketTick, quotes, rng: random.Random) -> bool:
         qty = config.SIMULATION_SIZE
         maker_buy = Fill(side="YES", qty=qty, price=quotes.yes_bid, maker=True)
         maker_sell = Fill(side="YES", qty=qty, price=quotes.yes_ask, maker=True)
@@ -96,7 +131,10 @@ class MM001Bot:
         self.metrics.rebate_income += fee_equivalent(qty, tick.yes_mid, config.FEE_RATE_BPS) * 0.10
         self.metrics.reward_income += fee_equivalent(qty, tick.yes_mid, config.FEE_RATE_BPS) * 0.08
 
+        took_taker = False
         if rng.random() < config.TAKER_FRACTION:
+            took_taker = True
+            self.metrics.taker_trades += 1
             self.metrics.taker_fees += fee_equivalent(qty, tick.yes_mid, config.FEE_RATE_BPS)
 
         if config.ENABLE_PAIR_MERGE:
@@ -112,3 +150,4 @@ class MM001Bot:
             edge = yes_sell + no_sell - 1.0
             if edge >= config.SPLIT_SELL_EDGE_MIN:
                 self.metrics.split_sell_pnl += qty * edge
+        return took_taker

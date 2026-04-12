@@ -202,7 +202,12 @@ Comandos recomendados:
 ```bash
 pytest -q tests/MM001
 python -m mmaker001.MM001.launcher --all --factory mmaker001.MM001.factory:build_bot
-```
+
+multitail -n 5 \
+  var/mm001/mm001-launcher.log \
+  var/mm001/mm001-trades.log \
+  var/mm001/reports/cycle_aggregates.jsonl \
+  var/mm001/reports/ticks.csv
 
 ---
 

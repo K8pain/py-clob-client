@@ -10,17 +10,17 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from Madawc_v3 import config
-from Madawc_v3.bot import MadawcV3Bot
-from Madawc_v3.factory import build_bot
-from Madawc_v3.launcher import _load_bot, main
-from Madawc_v3.models import BotMetrics, Fill, Inventory, MarketTick
-from Madawc_v3.strategy import apply_fill, build_quotes, fee_equivalent, minimum_net_spread, reservation_price
+from MM001 import config
+from MM001.bot import MM001Bot
+from MM001.factory import build_bot
+from MM001.launcher import _load_bot, main
+from MM001.models import BotMetrics, Fill, Inventory, MarketTick
+from MM001.strategy import apply_fill, build_quotes, fee_equivalent, minimum_net_spread, reservation_price
 
 
 def test_factory_build_bot_returns_expected_type() -> None:
     bot = build_bot(db_path="ignored.sqlite")
-    assert isinstance(bot, MadawcV3Bot)
+    assert isinstance(bot, MM001Bot)
 
 
 def test_fee_equivalent_and_minimum_net_spread_floor_behavior() -> None:
@@ -61,7 +61,7 @@ def test_bot_metrics_total_realized_property() -> None:
 
 
 def test_bot_run_all_generates_outputs_and_summary_shape(tmp_path: Path) -> None:
-    bot = MadawcV3Bot(cycles=5)
+    bot = MM001Bot(cycles=5)
     summary = bot.run_all(output_dir=tmp_path)
 
     assert (tmp_path / "ticks.csv").exists()
@@ -84,9 +84,9 @@ def test_load_bot_validation_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         _load_bot("badformat", tmp_path / "db.sqlite")
 
     # module exists but attribute is not callable
-    monkeypatch.setattr("Madawc_v3.factory.not_callable", 1, raising=False)
+    monkeypatch.setattr("MM001.factory.not_callable", 1, raising=False)
     with pytest.raises(TypeError):
-        _load_bot("Madawc_v3.factory:not_callable", tmp_path / "db.sqlite")
+        _load_bot("MM001.factory:not_callable", tmp_path / "db.sqlite")
 
 
 def test_launcher_main_requires_all_flag(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -104,7 +104,7 @@ def test_launcher_main_writes_simulation_summary(tmp_path: Path, monkeypatch: py
             "launcher",
             "--all",
             "--factory",
-            "Madawc_v3.factory:build_bot",
+            "MM001.factory:build_bot",
             "--db-path",
             str(db_path),
             "--output-dir",
@@ -119,14 +119,14 @@ def test_launcher_main_writes_simulation_summary(tmp_path: Path, monkeypatch: py
     assert "total_realized" in payload
 
 
-def test_madawc_v3_statement_coverage_threshold(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_mm001_statement_coverage_threshold(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Local coverage guard without external plugins (target >=85% statement lines)."""
     import trace
 
-    import Madawc_v3.bot as bot_module
-    import Madawc_v3.factory as factory_module
-    import Madawc_v3.launcher as launcher_module
-    import Madawc_v3.strategy as strategy_module
+    import MM001.bot as bot_module
+    import MM001.factory as factory_module
+    import MM001.launcher as launcher_module
+    import MM001.strategy as strategy_module
 
     modules = [bot_module, factory_module, launcher_module, strategy_module]
 
@@ -142,7 +142,7 @@ def test_madawc_v3_statement_coverage_threshold(tmp_path: Path, monkeypatch: pyt
         _ = minimum_net_spread(0.5)
         _ = reservation_price(0.4, inv)
         _ = build_bot("db.sqlite")
-        bot = MadawcV3Bot(cycles=3)
+        bot = MM001Bot(cycles=3)
         bot.run_all(output_dir=tmp_path / "cov_reports")
         bot._simulate_fill_and_pnl(tick, q, __import__("random").Random(1))
 
@@ -160,9 +160,9 @@ def test_madawc_v3_statement_coverage_threshold(tmp_path: Path, monkeypatch: pyt
             _load_bot("badformat", tmp_path / "invalid.sqlite")
         except ValueError:
             pass
-        monkeypatch.setattr("Madawc_v3.factory.not_callable", 1, raising=False)
+        monkeypatch.setattr("MM001.factory.not_callable", 1, raising=False)
         try:
-            _load_bot("Madawc_v3.factory:not_callable", tmp_path / "invalid.sqlite")
+            _load_bot("MM001.factory:not_callable", tmp_path / "invalid.sqlite")
         except TypeError:
             pass
         monkeypatch.setattr("sys.argv", ["launcher"])  # missing --all
@@ -176,7 +176,7 @@ def test_madawc_v3_statement_coverage_threshold(tmp_path: Path, monkeypatch: pyt
                 "launcher",
                 "--all",
                 "--factory",
-                "Madawc_v3.factory:build_bot",
+                "MM001.factory:build_bot",
                 "--output-dir",
                 str(tmp_path / "cov_launcher"),
             ],

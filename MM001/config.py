@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 # Runtime
@@ -16,6 +17,12 @@ SIMULATION_BASE_PRICE = 0.50
 SIMULATION_VOLATILITY = 0.015
 SIMULATION_SIZE = 100.0
 SIMULATION_RANDOM_SEED = 7
+
+# Market data source controls
+ORDERBOOK_SOURCE = os.getenv("MM001_ORDERBOOK_SOURCE", "api")
+CLOB_HOST = os.getenv("MM001_CLOB_HOST", "https://clob.polymarket.com")
+YES_TOKEN_ID = os.getenv("MM001_YES_TOKEN_ID", "")
+NO_TOKEN_ID = os.getenv("MM001_NO_TOKEN_ID", "")
 
 # Market making economics
 FEE_RATE_BPS = 35.0

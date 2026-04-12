@@ -93,15 +93,13 @@ def _load_bot(factory_ref: str, db_path: Path) -> MM001Bot:
 
 
 def _run_iteration(
-    factory_ref: str,
-    db_path: Path,
+    bot: MM001Bot,
     output_dir: Path,
     trades_log_file: Path,
     cycle_log_file: Path,
     loop_iteration: int,
     logger: logging.Logger,
 ) -> dict[str, float]:
-    bot = _load_bot(factory_ref, db_path)
     summary = bot.run_all(output_dir=output_dir)
     summary_path = output_dir / "simulation_summary.json"
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
@@ -142,13 +140,13 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     logger = _setup_logger(Path(args.log_file), log_level=args.log_level)
     logger.info("loop started interval_seconds=%s", args.interval_seconds)
+    bot = _load_bot(args.factory, db_path)
 
     iteration = 0
     while True:
         iteration += 1
         _run_iteration(
-            args.factory,
-            db_path,
+            bot,
             output_dir,
             Path(args.trades_log_file),
             Path(args.aggregate_log_file),

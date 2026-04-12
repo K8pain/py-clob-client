@@ -23,6 +23,21 @@ ORDERBOOK_SOURCE = os.getenv("MM001_ORDERBOOK_SOURCE", "api")
 CLOB_HOST = os.getenv("MM001_CLOB_HOST", "https://clob.polymarket.com")
 YES_TOKEN_ID = os.getenv("MM001_YES_TOKEN_ID", "")
 NO_TOKEN_ID = os.getenv("MM001_NO_TOKEN_ID", "")
+MARKET_INCLUDE_ONLY = tuple(
+    token.strip().lower()
+    for token in os.getenv("MM001_MARKET_INCLUDE_ONLY", "crypto").split(",")
+    if token.strip()
+)
+MARKET_EXCLUDED_PREFIXES = tuple(
+    prefix.strip()
+    for prefix in os.getenv(
+        "MM001_MARKET_EXCLUDED_PREFIXES",
+        "Will Bitcoin reach,Will Ethereum reach,Will Solana reach,Counter-Strike,Valorant:",
+    ).split(",")
+    if prefix.strip()
+)
+CURRENT_MARKET_SLUG = os.getenv("MM001_CURRENT_MARKET_SLUG", "")
+CURRENT_MARKET_CATEGORY = os.getenv("MM001_CURRENT_MARKET_CATEGORY", "crypto")
 
 # Market making economics
 FEE_RATE_BPS = 35.0

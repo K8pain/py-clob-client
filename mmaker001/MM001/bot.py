@@ -138,6 +138,15 @@ class MM001Bot:
         unpaired_yes_qty_total = max(0.0, self.inventory.yes - self.inventory.no)
         unpaired_no_qty_total = max(0.0, self.inventory.no - self.inventory.yes)
         largest_unpaired_qty = max(unpaired_yes_qty_total, unpaired_no_qty_total)
+        maker_notional = self.cycles * config.SIMULATION_SIZE
+        net_capture_per_unit_notional = self.metrics.total_realized / maker_notional if maker_notional else 0.0
+        reward_to_fee_ratio = (
+            (self.metrics.rebate_income + self.metrics.reward_income) / self.metrics.taker_fees
+            if self.metrics.taker_fees > 0
+            else 0.0
+        )
+        adverse_taker_ratio = self.metrics.taker_trades / max(self.metrics.fill_count, 1)
+        inventory_utilization_ratio = largest_unpaired_qty / max(config.MAX_ABS_INVENTORY, 1.0)
         return {
             "spread_pnl": round(self.metrics.spread_pnl, 4),
             "merge_pnl": round(self.metrics.merge_pnl, 4),
@@ -155,6 +164,11 @@ class MM001Bot:
             "average_win_pnl": round(average_win_pnl, 4),
             "average_loss_pnl": round(average_loss_pnl, 4),
             "fill_count": int(self.metrics.fill_count),
+            "maker_notional": round(maker_notional, 4),
+            "net_capture_per_unit_notional": round(net_capture_per_unit_notional, 6),
+            "reward_to_fee_ratio": round(reward_to_fee_ratio, 6),
+            "adverse_taker_ratio": round(adverse_taker_ratio, 6),
+            "inventory_utilization_ratio": round(inventory_utilization_ratio, 6),
             "current_inventory_state": {
                 "cash_free_usdc": round(self.inventory.cash, 4),
                 "paired_qty_total": round(paired_qty_total, 4),

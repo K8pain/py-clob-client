@@ -42,6 +42,7 @@ class BotMetrics:
     rebate_income: float = 0.0
     reward_income: float = 0.0
     directional_mtm: float = 0.0
+    taker_trades: int = 0
     events: list[str] = field(default_factory=list)
 
     @property

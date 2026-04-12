@@ -46,6 +46,11 @@ def _format_launcher_metrics_table(loop_iteration: int, summary: dict[str, float
         ("average_win_pnl", f"{float(summary.get('average_win_pnl', 0.0)):.4f}"),
         ("average_loss_pnl", f"{float(summary.get('average_loss_pnl', 0.0)):.4f}"),
         ("fill_count", str(int(summary.get("fill_count", 0)))),
+        ("maker_notional", f"{float(summary.get('maker_notional', 0.0)):.4f}"),
+        ("net_capture_per_unit_notional", f"{float(summary.get('net_capture_per_unit_notional', 0.0)):.6f}"),
+        ("reward_to_fee_ratio", f"{float(summary.get('reward_to_fee_ratio', 0.0)):.6f}"),
+        ("adverse_taker_ratio", f"{float(summary.get('adverse_taker_ratio', 0.0)):.6f}"),
+        ("inventory_utilization_ratio", f"{float(summary.get('inventory_utilization_ratio', 0.0)):.6f}"),
         ("current_inventory_state", json.dumps(inventory_state, ensure_ascii=False, sort_keys=True)),
         (
             "largest_inventory_stuck_market",

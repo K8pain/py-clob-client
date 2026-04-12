@@ -39,6 +39,30 @@ def test_factory_falls_back_to_simulated_when_api_ids_are_missing(monkeypatch: p
     assert isinstance(bot, MM001Bot)
 
 
+def test_factory_falls_back_to_simulated_when_market_type_not_included(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "ORDERBOOK_SOURCE", "api")
+    monkeypatch.setattr(config, "YES_TOKEN_ID", "yes")
+    monkeypatch.setattr(config, "NO_TOKEN_ID", "no")
+    monkeypatch.setattr(config, "MARKET_INCLUDE_ONLY", ("crypto",))
+    monkeypatch.setattr(config, "CURRENT_MARKET_CATEGORY", "sports")
+    bot = build_bot()
+    assert isinstance(bot, MM001Bot)
+    assert bot.data_source.__class__.__name__ == "SimulatedOrderBookSource"
+
+
+def test_factory_falls_back_to_simulated_when_market_slug_is_excluded(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "ORDERBOOK_SOURCE", "api")
+    monkeypatch.setattr(config, "YES_TOKEN_ID", "yes")
+    monkeypatch.setattr(config, "NO_TOKEN_ID", "no")
+    monkeypatch.setattr(config, "MARKET_INCLUDE_ONLY", ("crypto",))
+    monkeypatch.setattr(config, "CURRENT_MARKET_CATEGORY", "crypto")
+    monkeypatch.setattr(config, "MARKET_EXCLUDED_PREFIXES", ("Will Bitcoin reach",))
+    monkeypatch.setattr(config, "CURRENT_MARKET_SLUG", "Will Bitcoin reach 120k before June?")
+    bot = build_bot()
+    assert isinstance(bot, MM001Bot)
+    assert bot.data_source.__class__.__name__ == "SimulatedOrderBookSource"
+
+
 def test_fee_equivalent_and_minimum_net_spread_floor_behavior() -> None:
     fee = fee_equivalent(notional=100.0, price=0.5, fee_rate_bps=35.0)
     assert fee == pytest.approx(0.0875)
@@ -98,6 +122,11 @@ def test_bot_run_all_generates_outputs_and_summary_shape(tmp_path: Path) -> None
         "average_win_pnl",
         "average_loss_pnl",
         "fill_count",
+        "maker_notional",
+        "net_capture_per_unit_notional",
+        "reward_to_fee_ratio",
+        "adverse_taker_ratio",
+        "inventory_utilization_ratio",
         "current_inventory_state",
         "largest_inventory_stuck_market",
     }
@@ -170,6 +199,11 @@ def test_format_launcher_metrics_table_includes_point9_metrics() -> None:
             "average_win_pnl": 2.34,
             "average_loss_pnl": -0.45,
             "fill_count": 9,
+            "maker_notional": 500.0,
+            "net_capture_per_unit_notional": 0.02,
+            "reward_to_fee_ratio": 1.3,
+            "adverse_taker_ratio": 0.1,
+            "inventory_utilization_ratio": 0.03,
             "current_inventory_state": {"unpaired_yes_qty_total": 1.0},
             "largest_inventory_stuck_market": {"market_id": "SIMULATED_MM001", "unpaired_qty": 1.0},
         },
@@ -178,6 +212,11 @@ def test_format_launcher_metrics_table_includes_point9_metrics() -> None:
     assert "win_rate" in table
     assert "average_pnl_per_cycle" in table
     assert "fill_count" in table
+    assert "maker_notional" in table
+    assert "net_capture_per_unit_notional" in table
+    assert "reward_to_fee_ratio" in table
+    assert "adverse_taker_ratio" in table
+    assert "inventory_utilization_ratio" in table
     assert "current_inventory_state" in table
     assert "largest_inventory_stuck_market" in table
 

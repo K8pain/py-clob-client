@@ -189,6 +189,39 @@ def test_launcher_main_writes_simulation_summary(tmp_path: Path, monkeypatch: py
     assert "mm001.metrics.table" in log_file.read_text(encoding="utf-8")
 
 
+def test_launcher_main_accumulates_metrics_across_iterations(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "ORDERBOOK_SOURCE", "simulated")
+    out_dir = tmp_path / "reports"
+    db_path = tmp_path / "bot.sqlite"
+    aggregate_log = tmp_path / "cycle_aggregates.jsonl"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "launcher",
+            "--all",
+            "--factory",
+            "MM001.factory:build_bot",
+            "--db-path",
+            str(db_path),
+            "--output-dir",
+            str(out_dir),
+            "--aggregate-log-file",
+            str(aggregate_log),
+            "--interval-seconds",
+            "0",
+            "--max-runs",
+            "2",
+        ],
+    )
+    main()
+
+    payloads = [json.loads(line) for line in aggregate_log.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(payloads) == 2
+    first = payloads[0]["summary"]["total_realized"]
+    second = payloads[1]["summary"]["total_realized"]
+    assert second > first
+
+
 def test_format_launcher_metrics_table_includes_point9_metrics() -> None:
     table = _format_launcher_metrics_table(
         loop_iteration=3,

@@ -18,6 +18,7 @@ from MM001.launcher import (
     _append_trades_log,
     _format_launcher_metrics_table,
     _load_bot,
+    _sleep_with_refresh,
     _setup_logger,
     main,
 )
@@ -31,26 +32,25 @@ def test_factory_build_bot_returns_expected_type(monkeypatch: pytest.MonkeyPatch
     assert isinstance(bot, MM001Bot)
 
 
-def test_factory_falls_back_to_simulated_when_api_ids_are_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_factory_raises_when_api_ids_are_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "ORDERBOOK_SOURCE", "api")
     monkeypatch.setattr(config, "YES_TOKEN_ID", "")
     monkeypatch.setattr(config, "NO_TOKEN_ID", "")
-    bot = build_bot()
-    assert isinstance(bot, MM001Bot)
+    with pytest.raises(ValueError, match="MM001_YES_TOKEN_ID and MM001_NO_TOKEN_ID"):
+        build_bot()
 
 
-def test_factory_falls_back_to_simulated_when_market_type_not_included(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_factory_raises_when_market_type_not_included(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "ORDERBOOK_SOURCE", "api")
     monkeypatch.setattr(config, "YES_TOKEN_ID", "yes")
     monkeypatch.setattr(config, "NO_TOKEN_ID", "no")
     monkeypatch.setattr(config, "MARKET_INCLUDE_ONLY", ("crypto",))
     monkeypatch.setattr(config, "CURRENT_MARKET_CATEGORY", "sports")
-    bot = build_bot()
-    assert isinstance(bot, MM001Bot)
-    assert bot.data_source.__class__.__name__ == "SimulatedOrderBookSource"
+    with pytest.raises(ValueError, match="CURRENT_MARKET_CATEGORY/CURRENT_MARKET_SLUG enabled"):
+        build_bot()
 
 
-def test_factory_falls_back_to_simulated_when_market_slug_is_excluded(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_factory_raises_when_market_slug_is_excluded(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "ORDERBOOK_SOURCE", "api")
     monkeypatch.setattr(config, "YES_TOKEN_ID", "yes")
     monkeypatch.setattr(config, "NO_TOKEN_ID", "no")
@@ -58,9 +58,8 @@ def test_factory_falls_back_to_simulated_when_market_slug_is_excluded(monkeypatc
     monkeypatch.setattr(config, "CURRENT_MARKET_CATEGORY", "crypto")
     monkeypatch.setattr(config, "MARKET_EXCLUDED_PREFIXES", ("Will Bitcoin reach",))
     monkeypatch.setattr(config, "CURRENT_MARKET_SLUG", "Will Bitcoin reach 120k before June?")
-    bot = build_bot()
-    assert isinstance(bot, MM001Bot)
-    assert bot.data_source.__class__.__name__ == "SimulatedOrderBookSource"
+    with pytest.raises(ValueError, match="CURRENT_MARKET_CATEGORY/CURRENT_MARKET_SLUG enabled"):
+        build_bot()
 
 
 def test_fee_equivalent_and_minimum_net_spread_floor_behavior() -> None:
@@ -98,6 +97,35 @@ def test_apply_fill_updates_inventory_for_yes_and_no() -> None:
 def test_bot_metrics_total_realized_property() -> None:
     metrics = BotMetrics(spread_pnl=5, merge_pnl=3, split_sell_pnl=2, taker_fees=1, rebate_income=0.5, reward_income=0.25)
     assert metrics.total_realized == pytest.approx(9.75)
+
+
+def test_clob_orderbook_source_retries_transient_errors() -> None:
+    class DummyLevel:
+        def __init__(self, price: float) -> None:
+            self.price = str(price)
+
+    class DummyBook:
+        bids = [DummyLevel(0.49)]
+        asks = [DummyLevel(0.51)]
+
+    class FlakyClob:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def get_order_book(self, token_id: str):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("temporary network issue")
+            return DummyBook()
+
+    source = ClobOrderBookSource(host="https://clob.polymarket.com", yes_token_id="yes", no_token_id="no")
+    flaky = FlakyClob()
+    source._client = flaky
+
+    tick = source.next_tick(cycle=1, previous_mid=0.5, rng=__import__("random").Random(1))
+    assert tick.yes_mid == pytest.approx(0.5)
+    assert tick.no_mid == pytest.approx(0.5)
+    assert flaky.calls >= 3
 
 
 def test_bot_run_all_generates_outputs_and_summary_shape(tmp_path: Path) -> None:
@@ -147,6 +175,22 @@ def test_launcher_main_requires_all_flag(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr("sys.argv", ["launcher"])
     with pytest.raises(SystemExit):
         main()
+
+
+def test_sleep_with_refresh_calls_data_source_refresh(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DummySource:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def refresh_cache(self) -> None:
+            self.calls += 1
+
+    bot = MM001Bot(data_source=DummySource())
+    logger = _setup_logger(Path("var/mm001/test-refresh.log"))
+    monkeypatch.setattr("time.sleep", lambda _: None)
+
+    _sleep_with_refresh(bot, interval_seconds=2.2, logger=logger)
+    assert bot.data_source.calls == 3
 
 
 def test_launcher_main_writes_simulation_summary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

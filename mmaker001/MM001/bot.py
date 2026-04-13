@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import csv
+import asyncio
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
+
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 from . import config
 from .models import BotMetrics, Fill, Inventory, MarketTick
@@ -32,9 +35,26 @@ class ClobOrderBookSource:
 
     def __post_init__(self) -> None:
         self._client = ClobClient(host=self.host)
+        self._latest_yes_mid: float | None = None
+        self._latest_no_mid: float | None = None
+
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(0.5), reraise=True)
+    def _get_order_book(self, token_id: str):
+        return self._client.get_order_book(token_id)
+
+    async def _fetch_pair_async(self) -> tuple[float, float]:
+        yes_task = asyncio.to_thread(self._book_mid, self.yes_token_id)
+        no_task = asyncio.to_thread(self._book_mid, self.no_token_id)
+        yes_mid, no_mid = await asyncio.gather(yes_task, no_task)
+        return yes_mid, no_mid
+
+    def refresh_cache(self) -> None:
+        yes_mid, no_mid = asyncio.run(self._fetch_pair_async())
+        self._latest_yes_mid = yes_mid
+        self._latest_no_mid = no_mid
 
     def _book_mid(self, token_id: str) -> float:
-        orderbook = self._client.get_order_book(token_id)
+        orderbook = self._get_order_book(token_id)
         best_bid = max((float(level.price) for level in (orderbook.bids or [])), default=None)
         best_ask = min((float(level.price) for level in (orderbook.asks or [])), default=None)
         if best_bid is not None and best_ask is not None:
@@ -47,8 +67,9 @@ class ClobOrderBookSource:
 
     def next_tick(self, cycle: int, previous_mid: float, rng: random.Random) -> MarketTick:
         _ = previous_mid, rng
-        yes_mid = self._book_mid(self.yes_token_id)
-        no_mid = self._book_mid(self.no_token_id)
+        self.refresh_cache()
+        yes_mid = self._latest_yes_mid if self._latest_yes_mid is not None else self._book_mid(self.yes_token_id)
+        no_mid = self._latest_no_mid if self._latest_no_mid is not None else self._book_mid(self.no_token_id)
         return MarketTick(cycle=cycle, yes_mid=yes_mid, no_mid=no_mid, spread=max(0.0, yes_mid + no_mid - 1.0))
 
 

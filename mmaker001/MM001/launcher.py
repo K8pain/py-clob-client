@@ -12,6 +12,20 @@ from . import config
 from .bot import MM001Bot
 
 
+def _sleep_with_refresh(bot: MM001Bot, interval_seconds: float, logger: logging.Logger) -> None:
+    remaining = max(0.0, interval_seconds)
+    refresh = getattr(bot.data_source, "refresh_cache", None)
+    while remaining > 0:
+        chunk = min(1.0, remaining)
+        if callable(refresh):
+            try:
+                refresh()
+            except Exception as exc:
+                logger.warning("between-cycle refresh failed error=%s", exc)
+        time.sleep(chunk)
+        remaining -= chunk
+
+
 def _setup_logger(log_file: Path, log_level: str = "INFO") -> logging.Logger:
     log_file.parent.mkdir(parents=True, exist_ok=True)
     level = getattr(logging, str(log_level).upper(), logging.INFO)
@@ -145,17 +159,20 @@ def main() -> None:
     iteration = 0
     while True:
         iteration += 1
-        _run_iteration(
-            bot,
-            output_dir,
-            Path(args.trades_log_file),
-            Path(args.aggregate_log_file),
-            iteration,
-            logger,
-        )
+        try:
+            _run_iteration(
+                bot,
+                output_dir,
+                Path(args.trades_log_file),
+                Path(args.aggregate_log_file),
+                iteration,
+                logger,
+            )
+        except Exception as exc:
+            logger.exception("iteration=%s failed error=%s", iteration, exc)
         if args.max_runs > 0 and iteration >= args.max_runs:
             break
-        time.sleep(max(0.0, args.interval_seconds))
+        _sleep_with_refresh(bot, args.interval_seconds, logger)
 
 
 if __name__ == "__main__":

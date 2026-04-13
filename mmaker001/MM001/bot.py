@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import csv
 import asyncio
+import contextlib
+import json
 import random
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
@@ -13,6 +17,11 @@ from . import config
 from .models import BotMetrics, Fill, Inventory, MarketTick
 from .strategy import build_quotes, fee_equivalent
 from py_clob_client.client import ClobClient
+
+try:
+    import websockets
+except Exception:  # pragma: no cover
+    websockets = None
 
 
 class MarketDataSource(Protocol):
@@ -32,11 +41,83 @@ class ClobOrderBookSource:
     host: str
     yes_token_id: str
     no_token_id: str
+    market_ws_url: str = config.MARKET_WS_URL
 
     def __post_init__(self) -> None:
         self._client = ClobClient(host=self.host)
         self._latest_yes_mid: float | None = None
         self._latest_no_mid: float | None = None
+        self._last_refresh_ts = 0.0
+        self._stream_thread: threading.Thread | None = None
+        self._stream_stop = threading.Event()
+        self._stream_lock = threading.Lock()
+
+    def _extract_mid_from_message(self, message: dict) -> tuple[str | None, float | None]:
+        token_id = (
+            message.get("asset_id")
+            or message.get("token_id")
+            or message.get("market")
+            or message.get("id")
+        )
+        bids = message.get("bids") or []
+        asks = message.get("asks") or []
+        best_bid = max((float(level.get("price")) for level in bids if level.get("price") is not None), default=None)
+        best_ask = min((float(level.get("price")) for level in asks if level.get("price") is not None), default=None)
+        if best_bid is not None and best_ask is not None:
+            return token_id, (best_bid + best_ask) / 2.0
+        if best_bid is not None:
+            return token_id, best_bid
+        if best_ask is not None:
+            return token_id, best_ask
+        return token_id, None
+
+    async def _ws_loop(self) -> None:
+        if not self.market_ws_url or websockets is None:
+            return
+        subscribe_payload = {
+            "type": "subscribe",
+            "channel": "market",
+            "assets_ids": [self.yes_token_id, self.no_token_id],
+        }
+        while not self._stream_stop.is_set():
+            try:
+                async with websockets.connect(self.market_ws_url, ping_interval=15, ping_timeout=15) as ws:
+                    await ws.send(json.dumps(subscribe_payload))
+                    while not self._stream_stop.is_set():
+                        raw = await asyncio.wait_for(ws.recv(), timeout=5.0)
+                        payload = json.loads(raw)
+                        if isinstance(payload, list):
+                            for item in payload:
+                                self._apply_ws_message(item)
+                        elif isinstance(payload, dict):
+                            self._apply_ws_message(payload)
+            except Exception:
+                await asyncio.sleep(1.0)
+
+    def _apply_ws_message(self, payload: dict) -> None:
+        token_id, mid = self._extract_mid_from_message(payload)
+        if token_id is None or mid is None:
+            return
+        with self._stream_lock:
+            if token_id == self.yes_token_id:
+                self._latest_yes_mid = mid
+                self._last_refresh_ts = time.monotonic()
+            elif token_id == self.no_token_id:
+                self._latest_no_mid = mid
+                self._last_refresh_ts = time.monotonic()
+
+    def _ensure_ws_thread(self) -> None:
+        if self._stream_thread is not None and self._stream_thread.is_alive():
+            return
+        if not self.market_ws_url or websockets is None:
+            return
+
+        def _runner() -> None:
+            asyncio.run(self._ws_loop())
+
+        self._stream_stop.clear()
+        self._stream_thread = threading.Thread(target=_runner, daemon=True)
+        self._stream_thread.start()
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(0.5), reraise=True)
     def _get_order_book(self, token_id: str):
@@ -49,9 +130,17 @@ class ClobOrderBookSource:
         return yes_mid, no_mid
 
     def refresh_cache(self) -> None:
+        self._ensure_ws_thread()
+        with self._stream_lock:
+            has_hot_state = self._latest_yes_mid is not None and self._latest_no_mid is not None
+            is_fresh = (time.monotonic() - self._last_refresh_ts) < 2.0
+        if has_hot_state and is_fresh:
+            return
         yes_mid, no_mid = asyncio.run(self._fetch_pair_async())
-        self._latest_yes_mid = yes_mid
-        self._latest_no_mid = no_mid
+        with self._stream_lock:
+            self._latest_yes_mid = yes_mid
+            self._latest_no_mid = no_mid
+            self._last_refresh_ts = time.monotonic()
 
     def _book_mid(self, token_id: str) -> float:
         orderbook = self._get_order_book(token_id)
@@ -68,9 +157,23 @@ class ClobOrderBookSource:
     def next_tick(self, cycle: int, previous_mid: float, rng: random.Random) -> MarketTick:
         _ = previous_mid, rng
         self.refresh_cache()
-        yes_mid = self._latest_yes_mid if self._latest_yes_mid is not None else self._book_mid(self.yes_token_id)
-        no_mid = self._latest_no_mid if self._latest_no_mid is not None else self._book_mid(self.no_token_id)
+        with self._stream_lock:
+            yes_mid = self._latest_yes_mid
+            no_mid = self._latest_no_mid
+        if yes_mid is None:
+            yes_mid = self._book_mid(self.yes_token_id)
+        if no_mid is None:
+            no_mid = self._book_mid(self.no_token_id)
         return MarketTick(cycle=cycle, yes_mid=yes_mid, no_mid=no_mid, spread=max(0.0, yes_mid + no_mid - 1.0))
+
+    def close(self) -> None:
+        self._stream_stop.set()
+        if self._stream_thread is not None:
+            self._stream_thread.join(timeout=1.0)
+
+    def __del__(self) -> None:
+        with contextlib.suppress(Exception):
+            self.close()
 
 
 @dataclass

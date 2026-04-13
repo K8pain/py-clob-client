@@ -21,6 +21,7 @@ SIMULATION_RANDOM_SEED = 7
 # Market data source controls
 ORDERBOOK_SOURCE = os.getenv("MM001_ORDERBOOK_SOURCE", "api")
 CLOB_HOST = os.getenv("MM001_CLOB_HOST", "https://clob.polymarket.com")
+MARKET_WS_URL = os.getenv("MM001_MARKET_WS_URL", "wss://ws-subscriptions-clob.polymarket.com/ws/market")
 YES_TOKEN_ID = os.getenv("MM001_YES_TOKEN_ID", "")
 NO_TOKEN_ID = os.getenv("MM001_NO_TOKEN_ID", "")
 MARKET_INCLUDE_ONLY = tuple(

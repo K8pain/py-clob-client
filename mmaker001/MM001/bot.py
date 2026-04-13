@@ -138,7 +138,7 @@ class MM001Bot:
         unpaired_yes_qty_total = max(0.0, self.inventory.yes - self.inventory.no)
         unpaired_no_qty_total = max(0.0, self.inventory.no - self.inventory.yes)
         largest_unpaired_qty = max(unpaired_yes_qty_total, unpaired_no_qty_total)
-        maker_notional = self.cycles * config.SIMULATION_SIZE
+        maker_notional = self.metrics.executed_notional
         net_capture_per_unit_notional = self.metrics.total_realized / maker_notional if maker_notional else 0.0
         reward_to_fee_ratio = (
             (self.metrics.rebate_income + self.metrics.reward_income) / self.metrics.taker_fees
@@ -170,11 +170,12 @@ class MM001Bot:
             "adverse_taker_ratio": round(adverse_taker_ratio, 6),
             "inventory_utilization_ratio": round(inventory_utilization_ratio, 6),
             "current_inventory_state": {
-                "cash_free_usdc": round(self.inventory.cash, 4),
+                "cash_free_usdc": round(self.inventory.cash + self.metrics.total_realized, 4),
                 "paired_qty_total": round(paired_qty_total, 4),
                 "unpaired_yes_qty_total": round(unpaired_yes_qty_total, 4),
                 "unpaired_no_qty_total": round(unpaired_no_qty_total, 4),
                 "open_cycle_count": int(self.metrics.closed_cycle_count),
+                "closed_cycle_count": int(self.metrics.closed_cycle_count),
             },
             "largest_inventory_stuck_market": {
                 "market_id": "SIMULATED_MM001" if largest_unpaired_qty > 0 else "n/a",
@@ -187,6 +188,7 @@ class MM001Bot:
         maker_buy = Fill(side="YES", qty=qty, price=quotes.yes_bid, maker=True)
         maker_sell = Fill(side="YES", qty=qty, price=quotes.yes_ask, maker=True)
         self.metrics.fill_count += 2
+        self.metrics.executed_notional += qty * (maker_buy.price + maker_sell.price)
 
         self.metrics.spread_pnl += qty * (maker_sell.price - maker_buy.price)
         self.metrics.rebate_income += fee_equivalent(qty, tick.yes_mid, config.FEE_RATE_BPS) * 0.10
@@ -198,6 +200,7 @@ class MM001Bot:
             self.metrics.taker_trades += 1
             self.metrics.fill_count += 1
             self.metrics.taker_fees += fee_equivalent(qty, tick.yes_mid, config.FEE_RATE_BPS)
+            self.metrics.executed_notional += qty * tick.yes_mid
 
         if config.ENABLE_PAIR_MERGE:
             yes_buy = quotes.yes_bid

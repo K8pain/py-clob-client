@@ -44,6 +44,7 @@ class BotMetrics:
     directional_mtm: float = 0.0
     taker_trades: int = 0
     fill_count: int = 0
+    executed_notional: float = 0.0
     closed_cycle_count: int = 0
     winning_cycle_count: int = 0
     losing_cycle_count: int = 0

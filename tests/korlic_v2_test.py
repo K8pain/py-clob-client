@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "KORLIC_v2"))
 
 from Korlic_v2.bot import KorlicBot, KorlicConfig
 from Korlic_v2.factory import PublicGammaClient, _extract_market_status, _extract_resolution, _to_market_record
-from Korlic_v2.launcher import _run_all
+from Korlic_v2.launcher import _build_ascii_line_chart, _print_cycle_charts, _run_all
 from Korlic_v2.models import BookLevel, ClassificationStatus, ClassifiedMarket, Ledger, MarketRecord, OrderBookSnapshot, PaperPosition, SignalCandidate
 from Korlic_v2.paper import PaperExecutionEngine
 from Korlic_v2.signal import SignalConfig, SignalEngine
@@ -113,6 +113,30 @@ def test_append_cycle_aggregate_log_writes_json_line(tmp_path: Path):
     data = __import__("json").loads(payload)
     assert data["cycle_number"] == 3
     assert data["trades"]["total_trades"] == 1
+
+
+def test_build_ascii_line_chart_handles_empty_points():
+    text = _build_ascii_line_chart([], "demo", "{:.2f}")
+    assert text == "[demo] sin datos"
+
+
+def test_print_cycle_charts_prints_both_series(tmp_path: Path, capsys):
+    aggregate_file = tmp_path / "cycle_aggregates.jsonl"
+    aggregate_file.write_text(
+        "\n".join(
+            [
+                '{"timestamp_utc":"2026-01-01T00:00:00Z","trades":{"net_pnl":0.0,"win_rate_percent":0.0}}',
+                '{"timestamp_utc":"2026-01-01T00:01:00Z","trades":{"net_pnl":10.5,"win_rate_percent":50.0}}',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    _print_cycle_charts(aggregate_file, limit=20)
+    output = capsys.readouterr().out
+    assert "cumulative realized PNL vs time" in output
+    assert "cumulative winrate vs time" in output
 
 
 def test_public_gamma_client_paginates_and_keeps_non_btc_active_open(monkeypatch):

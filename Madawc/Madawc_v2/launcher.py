@@ -284,6 +284,61 @@ def _print_tail(path: Path, lines: int, title: str) -> None:
             print(line, end="")
 
 
+def _build_ascii_line_chart(points: list[tuple[str, float]], title: str, value_format: str) -> str:
+    if not points:
+        return f"[{title}] sin datos"
+    values = [point[1] for point in points]
+    blocks = "▁▂▃▄▅▆▇█"
+    min_v = min(values)
+    max_v = max(values)
+    if max_v == min_v:
+        spark = blocks[0] * len(values)
+    else:
+        spark = "".join(
+            blocks[int((value - min_v) / (max_v - min_v) * (len(blocks) - 1))]
+            for value in values
+        )
+    first_ts = points[0][0]
+    last_ts = points[-1][0]
+    return "\n".join(
+        [
+            f"[{title}]",
+            spark,
+            f"inicio={first_ts} fin={last_ts}",
+            f"min={value_format.format(min_v)} max={value_format.format(max_v)} actual={value_format.format(values[-1])}",
+        ]
+    )
+
+
+def _print_cycle_charts(aggregate_log_file: Path, limit: int = 60) -> None:
+    if not aggregate_log_file.exists():
+        print(f"[charts] no existe aggregate log: {aggregate_log_file}")
+        return
+    rows: list[dict[str, object]] = []
+    with aggregate_log_file.open("r", encoding="utf-8") as fh:
+        for line in fh.readlines()[-limit:]:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict):
+                rows.append(payload)
+    pnl_points: list[tuple[str, float]] = []
+    winrate_points: list[tuple[str, float]] = []
+    for row in rows:
+        ts = str(row.get("timestamp_utc", "n/a"))
+        trades = row.get("trades")
+        if not isinstance(trades, dict):
+            continue
+        pnl_points.append((ts, float(trades.get("net_pnl", 0.0))))
+        winrate_points.append((ts, float(trades.get("win_rate_percent", 0.0))))
+    print(_build_ascii_line_chart(pnl_points, "cumulative realized PNL vs time", "{:.4f}"))
+    print(_build_ascii_line_chart(winrate_points, "cumulative winrate vs time", "{:.2f}%"))
+
+
 def _run_all(args: argparse.Namespace) -> int:
     # Pipeline MVP: ejecutar ciclo(s), exportar reportes y mostrar tails.
     db_path = Path(args.db_path)
@@ -321,6 +376,7 @@ def _run_all(args: argparse.Namespace) -> int:
         )
     )
     _print_tail(log_file, lines=args.lines, title="launcher-log tail")
+    _print_cycle_charts(Path(args.aggregate_log_file), limit=max(args.lines, 20))
     _print_tail(Path(files["pseudo_trades"]), lines=args.lines, title="pseudo_trades.csv tail")
     return 0
 

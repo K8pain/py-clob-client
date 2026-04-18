@@ -12,7 +12,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from MM001 import config
 from MM001.bot import ClobOrderBookSource, MM001Bot
-from MM001.factory import build_bot
+from MM001.factory import _extract_yes_no_token_ids, build_bot
 from MM001.launcher import (
     _append_cycle_aggregate_log,
     _append_trades_log,
@@ -36,6 +36,7 @@ def test_factory_raises_when_api_ids_are_missing(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(config, "ORDERBOOK_SOURCE", "api")
     monkeypatch.setattr(config, "YES_TOKEN_ID", "")
     monkeypatch.setattr(config, "NO_TOKEN_ID", "")
+    monkeypatch.setattr("MM001.factory._resolve_token_ids_from_remote_market", lambda *_args, **_kwargs: [])
     with pytest.raises(ValueError, match="MM001_YES_TOKEN_ID and MM001_NO_TOKEN_ID"):
         build_bot()
 
@@ -60,6 +61,24 @@ def test_factory_raises_when_market_slug_is_excluded(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(config, "CURRENT_MARKET_SLUG", "Will Bitcoin reach 120k before June?")
     with pytest.raises(ValueError, match="CURRENT_MARKET_CATEGORY/CURRENT_MARKET_SLUG enabled"):
         build_bot()
+
+
+def test_extract_yes_no_token_ids_ignores_generic_id_field() -> None:
+    market = {
+        "tokens": [
+            {"outcome": "Yes", "id": "0"},
+            {"outcome": "No", "id": "1"},
+        ]
+    }
+    assert _extract_yes_no_token_ids(market) is None
+
+
+def test_extract_yes_no_token_ids_uses_clob_token_ids_with_outcomes() -> None:
+    market = {
+        "clobTokenIds": '["yes-token","no-token"]',
+        "outcomes": '["Yes","No"]',
+    }
+    assert _extract_yes_no_token_ids(market) == ("yes-token", "no-token")
 
 
 def test_fee_equivalent_and_minimum_net_spread_floor_behavior() -> None:
@@ -488,6 +507,22 @@ def test_mm001_statement_coverage_threshold(tmp_path: Path, monkeypatch: pytest.
         api_bot.data_source._client = DummyClob()
         api_bot.cycles = 2
         api_bot.run_all(output_dir=tmp_path / "cov_api")
+        factory_module._extract_yes_no_token_ids(
+            {
+                "tokens": [{"outcome": "Yes", "token_id": "yes"}, {"outcome": "No", "token_id": "no"}],
+            }
+        )
+        factory_module._extract_yes_no_token_ids(
+            {
+                "clobTokenIds": '["yes-alt","no-alt"]',
+                "outcomes": '["Yes","No"]',
+            }
+        )
+        factory_module._extract_yes_no_token_ids({"clobTokenIds": '["yes-a","no-b"]'})
+        factory_module._extract_yes_no_token_ids({"tokens": [{"outcome": "Yes", "id": "0"}]})
+        factory_module._parse_clob_token_ids(None)
+        factory_module._parse_clob_token_ids([])
+        factory_module._parse_clob_token_ids("[")
 
     tracer.runfunc(exercise)
     results = tracer.results()

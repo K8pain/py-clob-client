@@ -49,6 +49,12 @@ def _append_cycle_aggregate_log(cycle_log_file: Path, loop_iteration: int, summa
         fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
 
+def _append_summary_log(summary_log_file: Path, summary: dict[str, float]) -> None:
+    summary_log_file.parent.mkdir(parents=True, exist_ok=True)
+    with summary_log_file.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(summary, ensure_ascii=False) + "\n")
+
+
 def _format_launcher_metrics_table(loop_iteration: int, summary: dict[str, float]) -> str:
     inventory_state = summary.get("current_inventory_state", {}) or {}
     stuck_market = summary.get("largest_inventory_stuck_market", {}) or {}
@@ -111,6 +117,7 @@ def _run_iteration(
     output_dir: Path,
     trades_log_file: Path,
     cycle_log_file: Path,
+    summary_log_file: Path,
     loop_iteration: int,
     logger: logging.Logger,
 ) -> dict[str, float]:
@@ -119,6 +126,7 @@ def _run_iteration(
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     _append_trades_log(output_dir, trades_log_file, loop_iteration)
     _append_cycle_aggregate_log(cycle_log_file, loop_iteration, summary)
+    _append_summary_log(summary_log_file, summary)
     logger.info("mm001.metrics.table\n%s", _format_launcher_metrics_table(loop_iteration, summary))
     logger.info(
         "iteration=%s spread_pnl=%s taker_trades=%s total_realized=%s net_yes_inventory=%s",
@@ -128,7 +136,6 @@ def _run_iteration(
         summary.get("total_realized"),
         summary.get("net_yes_inventory"),
     )
-    print(json.dumps(summary, indent=2), flush=True)
     return summary
 
 
@@ -141,6 +148,7 @@ def main() -> None:
     parser.add_argument("--log-file", default="var/mm001/mm001-launcher.log")
     parser.add_argument("--trades-log-file", default="var/mm001/mm001-trades.log")
     parser.add_argument("--aggregate-log-file", default="var/mm001/reports/cycle_aggregates.jsonl")
+    parser.add_argument("--summary-log-file", default="var/mm001/reports/summary_prints.jsonl")
     parser.add_argument("--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"), default="INFO")
     parser.add_argument("--interval-seconds", type=float, default=240.0)
     parser.add_argument("--max-runs", type=int, default=0, help="0=loop infinito, >0 límite de iteraciones")
@@ -165,6 +173,7 @@ def main() -> None:
                 output_dir,
                 Path(args.trades_log_file),
                 Path(args.aggregate_log_file),
+                Path(args.summary_log_file),
                 iteration,
                 logger,
             )

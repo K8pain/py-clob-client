@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from . import config
 from .bot import ClobOrderBookSource, MM001Bot, MultiClobOrderBookSource, SimulatedOrderBookSource
 from py_clob_client.client import ClobClient
@@ -22,7 +24,7 @@ def _extract_yes_no_token_ids(market: dict) -> tuple[str, str] | None:
     no_token_id = ""
     for token in tokens:
         outcome = str(token.get("outcome") or token.get("name") or "").strip().lower()
-        token_id = str(token.get("token_id") or token.get("tokenId") or token.get("id") or "").strip()
+        token_id = str(token.get("token_id") or token.get("tokenId") or "").strip()
         if not token_id:
             continue
         if outcome == "yes":
@@ -31,7 +33,22 @@ def _extract_yes_no_token_ids(market: dict) -> tuple[str, str] | None:
             no_token_id = token_id
     if yes_token_id and no_token_id:
         return yes_token_id, no_token_id
+    parsed_token_ids = _parse_clob_token_ids(market.get("clobTokenIds"))
+    if len(parsed_token_ids) >= 2:
+        return parsed_token_ids[0], parsed_token_ids[1]
     return None
+
+
+def _parse_clob_token_ids(value: object) -> tuple[str, ...]:
+    if isinstance(value, list):
+        return tuple(str(item).strip() for item in value if str(item).strip())
+    if not isinstance(value, str) or not value.strip():
+        return ()
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return ()
+    return tuple(str(item).strip() for item in parsed) if isinstance(parsed, list) else ()
 
 
 def _is_remote_market_enabled(market: dict) -> bool:

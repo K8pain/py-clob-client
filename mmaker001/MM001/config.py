@@ -24,6 +24,7 @@ CLOB_HOST = os.getenv("MM001_CLOB_HOST", "https://clob.polymarket.com")
 MARKET_WS_URL = os.getenv("MM001_MARKET_WS_URL", "wss://ws-subscriptions-clob.polymarket.com/ws/market")
 YES_TOKEN_ID = os.getenv("MM001_YES_TOKEN_ID", "")
 NO_TOKEN_ID = os.getenv("MM001_NO_TOKEN_ID", "")
+MAX_SIMULTANEOUS_OB = max(1, int(os.getenv("MM001_MAX_SIMULTANEOUS_OB", "1")))
 MARKET_INCLUDE_ONLY = tuple(
     token.strip().lower()
     for token in os.getenv("MM001_MARKET_INCLUDE_ONLY", "crypto").split(",")

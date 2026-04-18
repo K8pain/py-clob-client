@@ -177,6 +177,31 @@ class ClobOrderBookSource:
 
 
 @dataclass
+class MultiClobOrderBookSource:
+    sources: list[ClobOrderBookSource]
+    _cursor: int = 0
+
+    def refresh_cache(self) -> None:
+        for source in self.sources:
+            source.refresh_cache()
+
+    def next_tick(self, cycle: int, previous_mid: float, rng: random.Random) -> MarketTick:
+        if not self.sources:
+            raise ValueError("no hay orderbooks configurados")
+        source = self.sources[self._cursor % len(self.sources)]
+        self._cursor += 1
+        return source.next_tick(cycle=cycle, previous_mid=previous_mid, rng=rng)
+
+    def close(self) -> None:
+        for source in self.sources:
+            source.close()
+
+    def __del__(self) -> None:
+        with contextlib.suppress(Exception):
+            self.close()
+
+
+@dataclass
 class MM001Bot:
     cycles: int = config.SIMULATION_CYCLES
     inventory: Inventory = field(default_factory=Inventory)

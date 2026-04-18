@@ -12,6 +12,7 @@ class MarketTick:
     yes_mid: float
     no_mid: float
     spread: float
+    market_id: str = "SIMULATED_MM001"
 
 
 @dataclass
@@ -51,6 +52,7 @@ class BotMetrics:
     breakeven_cycle_count: int = 0
     winning_cycle_pnl_sum: float = 0.0
     losing_cycle_pnl_sum: float = 0.0
+    redeem_count: int = 0
     events: list[str] = field(default_factory=list)
 
     @property

@@ -33,7 +33,7 @@ class SimulatedOrderBookSource:
     def next_tick(self, cycle: int, previous_mid: float, rng: random.Random) -> MarketTick:
         shock = rng.uniform(-config.SIMULATION_VOLATILITY, config.SIMULATION_VOLATILITY)
         mid = max(0.05, min(0.95, previous_mid + shock))
-        return MarketTick(cycle=cycle, yes_mid=mid, no_mid=1.0 - mid, spread=0.01)
+        return MarketTick(cycle=cycle, yes_mid=mid, no_mid=1.0 - mid, spread=0.01, market_id="SIMULATED_MM001")
 
 
 @dataclass
@@ -164,7 +164,13 @@ class ClobOrderBookSource:
             yes_mid = self._book_mid(self.yes_token_id)
         if no_mid is None:
             no_mid = self._book_mid(self.no_token_id)
-        return MarketTick(cycle=cycle, yes_mid=yes_mid, no_mid=no_mid, spread=max(0.0, yes_mid + no_mid - 1.0))
+        return MarketTick(
+            cycle=cycle,
+            yes_mid=yes_mid,
+            no_mid=no_mid,
+            spread=max(0.0, yes_mid + no_mid - 1.0),
+            market_id=f"{self.yes_token_id}:{self.no_token_id}",
+        )
 
     def close(self) -> None:
         self._stream_stop.set()
@@ -207,6 +213,10 @@ class MM001Bot:
     inventory: Inventory = field(default_factory=Inventory)
     metrics: BotMetrics = field(default_factory=BotMetrics)
     data_source: MarketDataSource = field(default_factory=SimulatedOrderBookSource)
+    market_open_orders: dict[str, int] = field(default_factory=dict)
+    market_canceled_orders: dict[str, int] = field(default_factory=dict)
+    market_closed_orders: dict[str, int] = field(default_factory=dict)
+    market_executed_orders: dict[str, int] = field(default_factory=dict)
 
     def run_all(self, output_dir: Path) -> dict[str, float]:
         rng = random.Random(config.SIMULATION_RANDOM_SEED)
@@ -237,8 +247,9 @@ class MM001Bot:
                 cycle_realized_before = self.metrics.total_realized
                 tick = self.data_source.next_tick(cycle=cycle, previous_mid=mid, rng=rng)
                 mid = tick.yes_mid
+                market_id = tick.market_id
                 quotes = build_quotes(tick, self.inventory)
-                taker_trade = self._simulate_fill_and_pnl(tick, quotes, rng)
+                taker_trade = self._simulate_fill_and_pnl(tick, quotes, rng, market_id=market_id)
                 cycle_realized_after = self.metrics.total_realized
                 cycle_realized_delta = cycle_realized_after - cycle_realized_before
                 self.metrics.closed_cycle_count += 1
@@ -318,6 +329,7 @@ class MM001Bot:
             "reward_to_fee_ratio": round(reward_to_fee_ratio, 6),
             "adverse_taker_ratio": round(adverse_taker_ratio, 6),
             "inventory_utilization_ratio": round(inventory_utilization_ratio, 6),
+            "redeem_count": int(self.metrics.redeem_count),
             "current_inventory_state": {
                 "cash_free_usdc": round(self.inventory.cash + self.metrics.total_realized, 4),
                 "paired_qty_total": round(paired_qty_total, 4),
@@ -330,14 +342,17 @@ class MM001Bot:
                 "market_id": "SIMULATED_MM001" if largest_unpaired_qty > 0 else "n/a",
                 "unpaired_qty": round(largest_unpaired_qty, 4),
             },
+            "market_orderbooks": self._market_orderbook_summary(),
         }
 
-    def _simulate_fill_and_pnl(self, tick: MarketTick, quotes, rng: random.Random) -> bool:
+    def _simulate_fill_and_pnl(self, tick: MarketTick, quotes, rng: random.Random, market_id: str) -> bool:
+        self.market_open_orders[market_id] = self.market_open_orders.get(market_id, 0) + 2
         qty = config.SIMULATION_SIZE
         maker_buy = Fill(side="YES", qty=qty, price=quotes.yes_bid, maker=True)
         maker_sell = Fill(side="YES", qty=qty, price=quotes.yes_ask, maker=True)
         self.metrics.fill_count += 2
         self.metrics.executed_notional += qty * (maker_buy.price + maker_sell.price)
+        self.market_executed_orders[market_id] = self.market_executed_orders.get(market_id, 0) + 2
 
         self.metrics.spread_pnl += qty * (maker_sell.price - maker_buy.price)
         self.metrics.rebate_income += fee_equivalent(qty, tick.yes_mid, config.FEE_RATE_BPS) * 0.10
@@ -350,6 +365,7 @@ class MM001Bot:
             self.metrics.fill_count += 1
             self.metrics.taker_fees += fee_equivalent(qty, tick.yes_mid, config.FEE_RATE_BPS)
             self.metrics.executed_notional += qty * tick.yes_mid
+            self.market_canceled_orders[market_id] = self.market_canceled_orders.get(market_id, 0) + 1
 
         if config.ENABLE_PAIR_MERGE:
             yes_buy = quotes.yes_bid
@@ -357,6 +373,8 @@ class MM001Bot:
             edge = 1.0 - yes_buy - no_buy
             if edge >= config.MERGE_EDGE_MIN:
                 self.metrics.merge_pnl += qty * edge
+                self.metrics.redeem_count += 1
+                self.market_closed_orders[market_id] = self.market_closed_orders.get(market_id, 0) + 1
 
         if config.ENABLE_SPLIT_SELL:
             yes_sell = quotes.yes_ask
@@ -365,3 +383,20 @@ class MM001Bot:
             if edge >= config.SPLIT_SELL_EDGE_MIN:
                 self.metrics.split_sell_pnl += qty * edge
         return took_taker
+
+    def _market_orderbook_summary(self) -> dict[str, dict[str, int]]:
+        market_ids = (
+            set(self.market_open_orders)
+            | set(self.market_canceled_orders)
+            | set(self.market_closed_orders)
+            | set(self.market_executed_orders)
+        )
+        return {
+            market_id: {
+                "open_orders": int(self.market_open_orders.get(market_id, 0)),
+                "executed_orders": int(self.market_executed_orders.get(market_id, 0)),
+                "canceled_orders": int(self.market_canceled_orders.get(market_id, 0)),
+                "closed_orders": int(self.market_closed_orders.get(market_id, 0)),
+            }
+            for market_id in sorted(market_ids)
+        }

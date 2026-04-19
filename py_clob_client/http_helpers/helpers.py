@@ -19,6 +19,15 @@ PUT = "PUT"
 _http_client = httpx.Client(http2=True)
 
 
+def _reset_http_client() -> None:
+    global _http_client
+    try:
+        _http_client.close()
+    except Exception:
+        pass
+    _http_client = httpx.Client(http2=True)
+
+
 def overloadHeaders(method: str, headers: dict) -> dict:
     if headers is None:
         headers = dict()
@@ -35,23 +44,29 @@ def overloadHeaders(method: str, headers: dict) -> dict:
 
 
 def request(endpoint: str, method: str, headers=None, data=None):
-    try:
-        headers = overloadHeaders(method, headers)
+    def _send_request():
         if isinstance(data, str):
             # Pre-serialized body: send exact bytes
-            resp = _http_client.request(
+            return _http_client.request(
                 method=method,
                 url=endpoint,
                 headers=headers,
                 content=data.encode("utf-8"),
             )
-        else:
-            resp = _http_client.request(
-                method=method,
-                url=endpoint,
-                headers=headers,
-                json=data,
-            )
+        return _http_client.request(
+            method=method,
+            url=endpoint,
+            headers=headers,
+            json=data,
+        )
+
+    try:
+        headers = overloadHeaders(method, headers)
+        try:
+            resp = _send_request()
+        except httpx.RemoteProtocolError:
+            _reset_http_client()
+            resp = _send_request()
 
         if resp.status_code != 200:
             raise PolyApiException(resp)

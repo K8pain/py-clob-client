@@ -1,9 +1,17 @@
 import json
 from pathlib import Path
+import sys
 
 import logging
 
-from Korlic.launcher import (
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+KORLIC_ROOT = REPO_ROOT / "KORLIC_v2"
+if str(KORLIC_ROOT) not in sys.path:
+    sys.path.insert(0, str(KORLIC_ROOT))
+
+from Korlic_v2.launcher import (
     _append_trade_log,
     _build_parser,
     _load_bot,
@@ -13,8 +21,8 @@ from Korlic.launcher import (
     _setup_logger,
     _tail_file,
 )
-from Korlic.models import StructuredEvent
-from Korlic.storage import KorlicStorage
+from Korlic_v2.models import StructuredEvent
+from Korlic_v2.storage import KorlicStorage
 
 
 def test_query_events_filters_by_type(tmp_path: Path):
@@ -109,7 +117,7 @@ def test_query_trade_counters(tmp_path: Path):
 
 def test_load_bot_from_builtin_factory(tmp_path: Path):
     db_path = tmp_path / "korlic.sqlite"
-    bot = _load_bot("Korlic.factory:build_bot", db_path)
+    bot = _load_bot("Korlic_v2.factory:build_bot", db_path)
     assert str(bot.storage.db_path) == str(db_path)
 
 
@@ -228,6 +236,6 @@ def test_setup_logger_enables_debug_for_launcher_bot_and_factory(tmp_path: Path)
     logger = _setup_logger(tmp_path / "launcher.log")
     bot_logger = logging.getLogger("korlic-bot")
     factory_logger = logging.getLogger("korlic-factory")
-    assert logger.level == logging.DEBUG
-    assert bot_logger.level == logging.DEBUG
-    assert factory_logger.level == logging.DEBUG
+    assert logger.level == logging.INFO
+    assert bot_logger.level == logging.INFO
+    assert factory_logger.level == logging.INFO

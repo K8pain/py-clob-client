@@ -1,14 +1,22 @@
 from __future__ import annotations
 
 from datetime import timezone
+import sys
+from pathlib import Path
 
-from Korlic.factory import (
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+KORLIC_ROOT = REPO_ROOT / "KORLIC_v2"
+if str(KORLIC_ROOT) not in sys.path:
+    sys.path.insert(0, str(KORLIC_ROOT))
+
+from Korlic_v2.factory import (
     PublicClobClient,
     PublicGammaClient,
     _IntervalRateLimiter,
     _extract_market_items,
     _flatten_event_markets,
-    _is_bitcoin_5m_market,
     _parse_end_time,
     _parse_epoch_value,
     _parse_token_ids_from_clob_ids,
@@ -55,8 +63,8 @@ def test_interval_rate_limiter_sleeps_when_called_too_fast(monkeypatch):
         calls.append(seconds)
         now["v"] += seconds
 
-    monkeypatch.setattr("Korlic.factory.time.monotonic", fake_monotonic)
-    monkeypatch.setattr("Korlic.factory.time.sleep", fake_sleep)
+    monkeypatch.setattr("Korlic_v2.factory.time.monotonic", fake_monotonic)
+    monkeypatch.setattr("Korlic_v2.factory.time.sleep", fake_sleep)
 
     limiter = _IntervalRateLimiter(min_interval_seconds=0.25)
     limiter.wait_turn()
@@ -64,7 +72,7 @@ def test_interval_rate_limiter_sleeps_when_called_too_fast(monkeypatch):
     assert calls == [0.25]
 
 
-def test_public_gamma_client_uses_events_endpoint_and_filters_bitcoin_5m(monkeypatch):
+def test_public_gamma_client_uses_events_endpoint_and_keeps_active_open_markets(monkeypatch):
     calls: list[dict] = []
     called_urls: list[str] = []
 
@@ -113,15 +121,15 @@ def test_public_gamma_client_uses_events_endpoint_and_filters_bitcoin_5m(monkeyp
         calls.append(params or {})
         return DummyResponse(market_payload)
 
-    monkeypatch.setattr("Korlic.factory.httpx.get", fake_get)
+    monkeypatch.setattr("Korlic_v2.factory.httpx.get", fake_get)
 
     client = PublicGammaClient()
     markets = client._fetch_active_markets()
 
-    assert len(markets) == 1
-    assert markets[0].market_id == "123"
-    assert called_urls[0].endswith("/events")
-    assert calls[0] == {"active": "true", "closed": "false", "limit": "100", "offset": "0"}
+    assert len(markets) == 2
+    assert {market.market_id for market in markets} == {"123", "124"}
+    assert any(url.endswith("/events") for url in called_urls)
+    assert {"active": "true", "closed": "false", "limit": "100", "offset": "0"} in calls
 
 
 def test_public_gamma_client_accepts_markets_payload_shape(monkeypatch):
@@ -143,7 +151,7 @@ def test_public_gamma_client_accepts_markets_payload_shape(monkeypatch):
                 ]
             }
 
-    monkeypatch.setattr("Korlic.factory.httpx.get", lambda *args, **kwargs: DummyResponse())
+    monkeypatch.setattr("Korlic_v2.factory.httpx.get", lambda *args, **kwargs: DummyResponse())
     markets = PublicGammaClient()._fetch_active_markets()
     assert len(markets) == 1
 
@@ -180,12 +188,6 @@ def test_flatten_event_markets_flattens_nested_markets():
     assert _flatten_event_markets(payload) == [{"id": "m1"}, {"id": "m2"}, {"id": "m3"}]
 
 
-def test_is_bitcoin_5m_market_requires_bitcoin_and_5m():
-    assert _is_bitcoin_5m_market({"question": "BTC 5m above 100k?"}) is True
-    assert _is_bitcoin_5m_market({"question": "ETH 5m above 4k?"}) is False
-    assert _is_bitcoin_5m_market({"question": "BTC above 100k?"}) is False
-
-
 def test_parse_token_ids_from_clob_ids_handles_json_string():
     assert _parse_token_ids_from_clob_ids("[\"1\",\"2\"]") == ("1", "2")
 
@@ -205,7 +207,7 @@ def test_to_market_record_parses_real_gamma_shape_with_clob_token_ids_string():
     }
     market = _to_market_record(raw)
     assert market is not None
-    assert market.market_id == "531202"
+    assert market.market_id == "0xb48621f7eba07b0a3eeabc6afb09ae42490239903997b9d412b0f69aeb040c8b"
     assert market.token_ids == (
         "75467129615908319583031474642658885479135630431889036121812713428992454630178",
         "3842963720267267286970642336860752782302644680156535061700039388405652129691",

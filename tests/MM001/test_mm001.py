@@ -9,9 +9,13 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+MM001_ROOT = REPO_ROOT / "mmaker001"
+if str(MM001_ROOT) not in sys.path:
+    sys.path.insert(0, str(MM001_ROOT))
 
 from MM001 import config
-from MM001.bot import ClobOrderBookSource, MM001Bot
+from MM001 import factory as factory_module
+from MM001.bot import ClobOrderBookSource, MM001Bot, MultiClobOrderBookSource
 from MM001.factory import _extract_yes_no_token_ids, build_bot
 from MM001.launcher import (
     _append_cycle_aggregate_log,

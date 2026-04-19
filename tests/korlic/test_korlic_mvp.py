@@ -6,15 +6,20 @@ import pytest
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+KORLIC_ROOT = REPO_ROOT / "KORLIC_v2"
+if str(KORLIC_ROOT) not in sys.path:
+    sys.path.insert(0, str(KORLIC_ROOT))
 
 
-from Korlic.bot import KorlicBot
-from Korlic.discovery import DiscoveryEngine, MarketClassifier
-from Korlic.models import BookLevel, Ledger, MarketRecord, OrderBookSnapshot
-from Korlic.paper import PaperExecutionEngine
-from Korlic.signal import SignalConfig, SignalEngine
-from Korlic.storage import KorlicStorage
+from Korlic_v2.bot import KorlicBot
+from Korlic_v2.discovery import DiscoveryEngine, MarketClassifier
+from Korlic_v2.models import BookLevel, Ledger, MarketRecord, OrderBookSnapshot
+from Korlic_v2.paper import PaperExecutionEngine
+from Korlic_v2.signal import SignalConfig, SignalEngine
+from Korlic_v2.storage import KorlicStorage
 
 
 class DummyGamma:

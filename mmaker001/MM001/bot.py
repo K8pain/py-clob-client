@@ -15,7 +15,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 from . import config
 from .models import BotMetrics, Fill, Inventory, MarketTick
-from .strategy import build_quotes, fee_equivalent
+from .strategy import apply_fill, build_quotes, fee_equivalent
 from py_clob_client.client import ClobClient
 from py_clob_client.exceptions import PolyApiException
 
@@ -385,23 +385,28 @@ class MM001Bot:
     def _simulate_fill_and_pnl(self, tick: MarketTick, quotes, rng: random.Random, market_id: str) -> bool:
         self.market_open_orders[market_id] = self.market_open_orders.get(market_id, 0) + 2
         qty = config.SIMULATION_SIZE
-        maker_buy = Fill(side="YES", qty=qty, price=quotes.yes_bid, maker=True)
-        maker_sell = Fill(side="YES", qty=qty, price=quotes.yes_ask, maker=True)
-        self.metrics.fill_count += 2
-        self.metrics.executed_notional += qty * (maker_buy.price + maker_sell.price)
-        self.market_executed_orders[market_id] = self.market_executed_orders.get(market_id, 0) + 2
+        executed_side = "YES" if rng.random() < 0.5 else "NO"
+        maker_fill = Fill(side=executed_side, qty=qty, price=quotes.yes_bid if executed_side == "YES" else quotes.no_bid, maker=True)
+        apply_fill(self.inventory, maker_fill)
+        self.metrics.fill_count += 1
+        self.metrics.executed_notional += qty * maker_fill.price
+        self.market_executed_orders[market_id] = self.market_executed_orders.get(market_id, 0) + 1
 
-        self.metrics.spread_pnl += qty * (maker_sell.price - maker_buy.price)
+        maker_spread = quotes.yes_ask - quotes.yes_bid if executed_side == "YES" else quotes.no_ask - quotes.no_bid
+        self.metrics.spread_pnl += qty * maker_spread
         self.metrics.rebate_income += fee_equivalent(qty, tick.yes_mid, config.FEE_RATE_BPS) * 0.10
         self.metrics.reward_income += fee_equivalent(qty, tick.yes_mid, config.FEE_RATE_BPS) * 0.08
 
         took_taker = False
         if rng.random() < config.TAKER_FRACTION:
             took_taker = True
+            taker_side = "NO" if self.inventory.net_yes > 0 else "YES"
+            taker_fill = Fill(side=taker_side, qty=qty, price=tick.yes_mid if taker_side == "YES" else tick.no_mid, maker=False)
+            apply_fill(self.inventory, taker_fill)
             self.metrics.taker_trades += 1
             self.metrics.fill_count += 1
             self.metrics.taker_fees += fee_equivalent(qty, tick.yes_mid, config.FEE_RATE_BPS)
-            self.metrics.executed_notional += qty * tick.yes_mid
+            self.metrics.executed_notional += qty * taker_fill.price
             self.market_canceled_orders[market_id] = self.market_canceled_orders.get(market_id, 0) + 1
 
         if config.ENABLE_PAIR_MERGE:

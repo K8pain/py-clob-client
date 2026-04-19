@@ -28,6 +28,7 @@ from MM001.launcher import (
 )
 from MM001.models import BotMetrics, Fill, Inventory, MarketTick
 from MM001.strategy import apply_fill, build_quotes, fee_equivalent, minimum_net_spread, reservation_price
+from py_clob_client.exceptions import PolyApiException
 
 
 def test_factory_build_bot_returns_expected_type(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -191,6 +192,61 @@ def test_clob_orderbook_source_uses_hot_ws_cache_without_rest_calls() -> None:
     tick = source.next_tick(cycle=1, previous_mid=0.5, rng=__import__("random").Random(1))
     assert tick.yes_mid == pytest.approx(0.44)
     assert tick.no_mid == pytest.approx(0.56)
+
+
+def test_multi_clob_source_discards_pair_on_missing_orderbook_during_refresh() -> None:
+    class MissingSource:
+        def refresh_cache(self) -> None:
+            exc = PolyApiException(error_msg={"error": "No orderbook exists for the requested token id"})
+            exc.status_code = 404
+            raise exc
+
+        def close(self) -> None:
+            return None
+
+    class HealthySource:
+        def __init__(self) -> None:
+            self.refreshed = False
+
+        def refresh_cache(self) -> None:
+            self.refreshed = True
+
+        def close(self) -> None:
+            return None
+
+    healthy = HealthySource()
+    source = MultiClobOrderBookSource(sources=[MissingSource(), healthy])  # type: ignore[list-item]
+    source.refresh_cache()
+
+    assert len(source.sources) == 1
+    assert source.sources[0] is healthy
+    assert healthy.refreshed is True
+
+
+def test_multi_clob_source_discards_pair_on_missing_orderbook_during_next_tick() -> None:
+    class MissingSource:
+        def next_tick(self, cycle: int, previous_mid: float, rng):
+            _ = cycle, previous_mid, rng
+            exc = PolyApiException(error_msg={"error": "No orderbook exists for the requested token id"})
+            exc.status_code = 404
+            raise exc
+
+        def close(self) -> None:
+            return None
+
+    class HealthySource:
+        def next_tick(self, cycle: int, previous_mid: float, rng):
+            _ = previous_mid, rng
+            return MarketTick(cycle=cycle, yes_mid=0.61, no_mid=0.39, spread=0.0, market_id="ok")
+
+        def close(self) -> None:
+            return None
+
+    source = MultiClobOrderBookSource(sources=[MissingSource(), HealthySource()])  # type: ignore[list-item]
+    tick = source.next_tick(cycle=1, previous_mid=0.5, rng=__import__("random").Random(1))
+
+    assert tick.market_id == "ok"
+    assert len(source.sources) == 1
 
 
 def test_bot_run_all_generates_outputs_and_summary_shape(tmp_path: Path) -> None:

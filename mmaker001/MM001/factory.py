@@ -5,6 +5,7 @@ import json
 from . import config
 from .bot import ClobOrderBookSource, MM001Bot, MultiClobOrderBookSource, SimulatedOrderBookSource
 from py_clob_client.client import ClobClient
+from py_clob_client.exceptions import PolyApiException
 
 
 def _is_market_enabled() -> bool:
@@ -76,11 +77,13 @@ def _resolve_token_ids_from_remote_market(slug: str, max_markets: int) -> list[t
                 if market_slug != target_slug:
                     continue
                 resolved = _extract_yes_no_token_ids(market)
-                return [resolved] if resolved is not None else []
+                if resolved is None:
+                    return []
+                return [resolved] if _pair_has_orderbooks(client, *resolved) else []
             if not _is_remote_market_enabled(market):
                 continue
             resolved = _extract_yes_no_token_ids(market)
-            if resolved is not None:
+            if resolved is not None and _pair_has_orderbooks(client, *resolved):
                 resolved_pairs.append(resolved)
                 if len(resolved_pairs) >= max_markets:
                     return resolved_pairs
@@ -88,6 +91,20 @@ def _resolve_token_ids_from_remote_market(slug: str, max_markets: int) -> list[t
         if not next_cursor or next_cursor == "LTE=":
             break
     return resolved_pairs
+
+
+def _pair_has_orderbooks(client: ClobClient, yes_token_id: str, no_token_id: str) -> bool:
+    return _token_has_orderbook(client, yes_token_id) and _token_has_orderbook(client, no_token_id)
+
+
+def _token_has_orderbook(client: ClobClient, token_id: str) -> bool:
+    try:
+        client.get_order_book(token_id)
+        return True
+    except PolyApiException as exc:
+        if exc.status_code == 404:
+            return False
+        raise
 
 
 def build_bot(db_path: str | None = None) -> MM001Bot:

@@ -116,37 +116,47 @@ def build_bot(db_path: str | None = None) -> MM001Bot:
         raise ValueError("MM001 api mode requires CURRENT_MARKET_CATEGORY/CURRENT_MARKET_SLUG enabled by filters")
     yes_token_id = config.YES_TOKEN_ID
     no_token_id = config.NO_TOKEN_ID
-    if not yes_token_id or not no_token_id:
-        resolved_pairs = _resolve_token_ids_from_remote_market(
-            config.CURRENT_MARKET_SLUG, max_markets=config.MAX_SIMULTANEOUS_OB
-        )
-        if not resolved_pairs:
-            raise ValueError("MM001 api mode requires MM001_YES_TOKEN_ID and MM001_NO_TOKEN_ID")
-        if len(resolved_pairs) == 1:
-            yes_token_id, no_token_id = resolved_pairs[0]
-            return MM001Bot(
-                data_source=ClobOrderBookSource(
-                    host=config.CLOB_HOST,
-                    yes_token_id=yes_token_id,
-                    no_token_id=no_token_id,
-                )
-            )
+
+    client = ClobClient(host=config.CLOB_HOST)
+    has_configured_pair = bool(yes_token_id and no_token_id)
+    configured_pair_is_live = has_configured_pair and _pair_has_orderbooks(client, yes_token_id, no_token_id)
+
+    if configured_pair_is_live:
         return MM001Bot(
-            data_source=MultiClobOrderBookSource(
-                sources=[
-                    ClobOrderBookSource(
-                        host=config.CLOB_HOST,
-                        yes_token_id=resolved_yes_token_id,
-                        no_token_id=resolved_no_token_id,
-                    )
-                    for resolved_yes_token_id, resolved_no_token_id in resolved_pairs
-                ]
+            data_source=ClobOrderBookSource(
+                host=config.CLOB_HOST,
+                yes_token_id=yes_token_id,
+                no_token_id=no_token_id,
+            )
+        )
+
+    resolved_pairs = _resolve_token_ids_from_remote_market(
+        config.CURRENT_MARKET_SLUG, max_markets=config.MAX_SIMULTANEOUS_OB
+    )
+    if not resolved_pairs:
+        if has_configured_pair:
+            raise ValueError(
+                "MM001 configured token IDs have no orderbook; update MM001_YES_TOKEN_ID/MM001_NO_TOKEN_ID"
+            )
+        raise ValueError("MM001 api mode requires MM001_YES_TOKEN_ID and MM001_NO_TOKEN_ID")
+    if len(resolved_pairs) == 1:
+        resolved_yes_token_id, resolved_no_token_id = resolved_pairs[0]
+        return MM001Bot(
+            data_source=ClobOrderBookSource(
+                host=config.CLOB_HOST,
+                yes_token_id=resolved_yes_token_id,
+                no_token_id=resolved_no_token_id,
             )
         )
     return MM001Bot(
-        data_source=ClobOrderBookSource(
-            host=config.CLOB_HOST,
-            yes_token_id=yes_token_id,
-            no_token_id=no_token_id,
+        data_source=MultiClobOrderBookSource(
+            sources=[
+                ClobOrderBookSource(
+                    host=config.CLOB_HOST,
+                    yes_token_id=resolved_yes_token_id,
+                    no_token_id=resolved_no_token_id,
+                )
+                for resolved_yes_token_id, resolved_no_token_id in resolved_pairs
+            ]
         )
     )

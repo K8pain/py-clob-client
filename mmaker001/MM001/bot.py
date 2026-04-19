@@ -17,6 +17,7 @@ from . import config
 from .models import BotMetrics, Fill, Inventory, MarketTick
 from .strategy import build_quotes, fee_equivalent
 from py_clob_client.client import ClobClient
+from py_clob_client.exceptions import PolyApiException
 
 try:
     import websockets
@@ -187,16 +188,52 @@ class MultiClobOrderBookSource:
     sources: list[ClobOrderBookSource]
     _cursor: int = 0
 
+    @staticmethod
+    def _is_missing_orderbook_error(exc: Exception) -> bool:
+        if not isinstance(exc, PolyApiException):
+            return False
+        if exc.status_code == 404:
+            return True
+        message = str(getattr(exc, "error_msg", "")).lower()
+        return "no orderbook exists for the requested token id" in message
+
+    def _remove_source_at(self, index: int) -> None:
+        self.sources.pop(index)
+        if not self.sources:
+            self._cursor = 0
+            return
+        self._cursor %= len(self.sources)
+
     def refresh_cache(self) -> None:
-        for source in self.sources:
-            source.refresh_cache()
+        index = 0
+        while index < len(self.sources):
+            source = self.sources[index]
+            try:
+                source.refresh_cache()
+                index += 1
+            except Exception as exc:
+                if self._is_missing_orderbook_error(exc):
+                    self._remove_source_at(index)
+                    continue
+                raise
 
     def next_tick(self, cycle: int, previous_mid: float, rng: random.Random) -> MarketTick:
         if not self.sources:
             raise ValueError("no hay orderbooks configurados")
-        source = self.sources[self._cursor % len(self.sources)]
-        self._cursor += 1
-        return source.next_tick(cycle=cycle, previous_mid=previous_mid, rng=rng)
+        attempts = len(self.sources)
+        while attempts > 0 and self.sources:
+            index = self._cursor % len(self.sources)
+            source = self.sources[index]
+            self._cursor += 1
+            try:
+                return source.next_tick(cycle=cycle, previous_mid=previous_mid, rng=rng)
+            except Exception as exc:
+                if self._is_missing_orderbook_error(exc):
+                    self._remove_source_at(index)
+                    attempts -= 1
+                    continue
+                raise
+        raise ValueError("no hay orderbooks configurados")
 
     def close(self) -> None:
         for source in self.sources:

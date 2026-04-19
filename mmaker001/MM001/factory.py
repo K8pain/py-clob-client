@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from . import config
-from .bot import ClobOrderBookSource, MM001Bot, MultiClobOrderBookSource, SimulatedOrderBookSource
+from .bot import ClobOrderBookSource, MM001Bot, MultiClobOrderBookSource
 from py_clob_client.client import ClobClient
 from py_clob_client.exceptions import PolyApiException
 
@@ -110,8 +110,8 @@ def _token_has_orderbook(client: ClobClient, token_id: str) -> bool:
 def build_bot(db_path: str | None = None) -> MM001Bot:
     """Factory contract used by launcher. db_path kept for compatibility."""
     _ = db_path
-    if config.ORDERBOOK_SOURCE == "simulated":
-        return MM001Bot(data_source=SimulatedOrderBookSource())
+    if config.ORDERBOOK_SOURCE != "api":
+        raise ValueError("MM001 only supports real API orderbook data; simulated orderbook source is disabled")
     if not _is_market_enabled():
         raise ValueError("MM001 api mode requires CURRENT_MARKET_CATEGORY/CURRENT_MARKET_SLUG enabled by filters")
     yes_token_id = config.YES_TOKEN_ID

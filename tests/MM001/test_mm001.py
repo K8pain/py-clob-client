@@ -31,10 +31,10 @@ from MM001.strategy import apply_fill, build_quotes, fee_equivalent, minimum_net
 from py_clob_client.exceptions import PolyApiException
 
 
-def test_factory_build_bot_returns_expected_type(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_factory_rejects_simulated_orderbook_source(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "ORDERBOOK_SOURCE", "simulated")
-    bot = build_bot(db_path="ignored.sqlite")
-    assert isinstance(bot, MM001Bot)
+    with pytest.raises(ValueError, match="real API orderbook data"):
+        build_bot(db_path="ignored.sqlite")
 
 
 def test_config_defaults_to_api_orderbook_source() -> None:

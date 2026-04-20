@@ -1,231 +1,168 @@
 # LLD — MM001 (mmaker001)
 
-## Idea general (práctica y concisa)
+## Objetivo técnico
 
-MM001 debe usarse como un **motor de decisión operativa**, no solo como simulador: en cada corrida, decidir **seguir, pausar o ajustar** usando pocas métricas clave.
+Documentar a bajo nivel el flujo real de ejecución de `MM001` como motor de paper-trading de market making para mercados binarios YES/NO.
 
-### Uso práctico con métricas clave
-- **`total_realized`**: semáforo principal de rentabilidad neta por iteración.
-- **`net_capture_per_unit_notional`**: eficiencia de captura por notional (comparabilidad entre corridas).
-- **`adverse_taker_ratio`** + **`taker_fees`**: presión de costo por salidas taker/adverse flow.
-- **`inventory_utilization_ratio`** + `current_inventory_state.unpaired_*`: riesgo de inventario atascado.
-- **`reward_to_fee_ratio`**: qué tanto rebates/rewards compensan fricción de fees.
-
-### Failsafe approach (operación)
-1. **Modo degradado inmediato:** si CLOB/WS falla, correr `simulated` para no perder continuidad analítica.
-2. **Kill-switch operativo:** si `total_realized` cae por debajo de umbral interno o `inventory_utilization_ratio` sube de límite, pausar iteraciones y revisar parámetros.
-3. **Reanudación controlada:** retomar con `--max-runs 1` y validar que mejoren `net_capture_per_unit_notional` y `adverse_taker_ratio` antes de volver a loop continuo.
-
-## 1) Define what we are building
-
-### Qué es
-`MM001` es un bot de **paper trading** para market making en mercados binarios YES/NO, con dos modos de datos:
-- **API/CLOB real** (order book de Polymarket CLOB).
-- **Simulado** (fallback/simulación determinista).
-
-El entrypoint operativo es el launcher (`python -m mmaker001.MM001.launcher --all --factory ...`).
-
-### Para quién es
-- Operador cuantitativo que necesita validar economics de maker antes de live.
-- Dev de estrategia que requiere medición reproducible por componente de PnL.
-
-### Qué problema resuelve
-Separa explícitamente los componentes del PnL para evitar decisiones con señales mezcladas:
-- `spread_pnl`, `merge_pnl`, `split_sell_pnl`
-- `taker_fees`, `rebate_income`, `reward_income`
-- `directional_mtm` (residual de inventario)
-
-### Cómo funciona (alto nivel)
-1. `launcher.py` valida flags, construye bot vía factory y ejecuta loop de iteraciones.
-2. `factory.py` decide si usar fuente simulada o CLOB (single o multi market).
-3. `MM001Bot.run_all()` corre N ciclos, genera quotes, simula fills/economics y exporta reportes.
-4. Se escriben artefactos (`ticks.csv`, `simulation_summary.json`, logs JSONL).
-
-### Conceptos principales y relaciones
-- **`MarketTick`**: snapshot de mercado por ciclo (`yes_mid`, `no_mid`, `spread`, `market_id`).
-- **`Inventory`**: estado inventario/caja (`yes`, `no`, `cash`, `net_yes`).
-- **`BotMetrics`**: acumuladores de PnL y KPIs.
-- **`QuotePlan`**: precios bid/ask de YES y NO.
-- **`MarketDataSource` (Protocol)**: contrato para `next_tick(...)`.
-- **`SimulatedOrderBookSource` / `ClobOrderBookSource` / `MultiClobOrderBookSource`**: implementaciones de datos.
-- **`MM001Bot`**: orquesta simulación y reporte.
-
-> Aplicando “distill the model”: el diseño actual ya favorece módulos simples, flujo explícito y separación clara entre **crear** (`factory`) y **usar** (`launcher`/`bot`) dependencias.
+> Estado actual validado en código: **MM001 no permite fuente de orderbook simulada** en el factory (`ORDERBOOK_SOURCE` debe ser `api`).
 
 ---
 
-## 2) Design the user experience
+## 1. Alcance funcional implementado
 
-### User stories (happy + alternativos)
+`MM001` ejecuta ciclos de quoting y PnL sobre datos de orderbook reales (CLOB) y sólo simula la contraparte de fills maker/taker para estimar economics.
 
-1. **Como operador**, quiero correr una simulación completa con un comando.
-   - Happy flow: `--all` + `--factory` válido => corre iteración(es) y genera reportes.
-   - Alternativo: falta `--all` => aborta con mensaje explícito.
+### Incluido
+- Lectura de orderbook YES/NO desde CLOB:
+  - por REST (`get_order_book`),
+  - con caché caliente alimentada por WebSocket cuando está disponible.
+- Construcción de quotes (`YES/NO bid/ask`) por ciclo.
+- Simulación de fills maker/taker para estimar:
+  - `spread_pnl`, `merge_pnl`, `split_sell_pnl`,
+  - `taker_fees`, `rebate_income`, `reward_income`,
+  - KPIs agregados de riesgo/inventario.
+- Ejecución por iteraciones desde `launcher` y exportación de artefactos.
 
-2. **Como analista**, quiero ver evolución por ciclo y resumen agregado.
-   - Happy flow: `ticks.csv` + `simulation_summary.json` + `cycle_aggregates.jsonl`.
-   - Alternativo: fallo puntual de iteración => se loguea excepción y el loop continúa.
-
-3. **Como dev**, quiero poder cambiar entre fuente simulada y CLOB por config.
-   - Happy flow: `MM001_ORDERBOOK_SOURCE=simulated` usa fuente sintética.
-   - Alternativo: en API mode sin token IDs válidos/mercado resoluble => error explícito de factory.
-
-### Impacto UI / navegación
-No hay UI gráfica. La UX está en CLI + archivos de salida/log:
-- CLI: flags de ejecución.
-- Observabilidad: logs tabulares + JSONL + CSV.
-
-### Mockup textual (wireframe CLI)
-- Comando: `python -m mmaker001.MM001.launcher --all --factory mmaker001.MM001.factory:build_bot`
-- Salidas esperadas:
-  - `var/mm001/reports/ticks.csv`
-  - `var/mm001/reports/simulation_summary.json`
-  - `var/mm001/reports/cycle_aggregates.jsonl`
-  - `var/mm001/mm001-launcher.log`
+### Excluido
+- Source de orderbook sintético/simulado en runtime operativo.
+- Colocación de órdenes live en exchange.
 
 ---
 
-## 3) Understand the technical needs
+## 2. Arquitectura técnica (módulos y contratos)
 
-### Componentes y responsabilidades
+## 2.1 Contrato de mercado
+`MarketDataSource` (Protocol):
+- `next_tick(cycle, previous_mid, rng) -> MarketTick`
 
-- `config.py`
-  - Parámetros de simulación, economics, filtros de mercados, endpoints CLOB/WS y estados del flujo.
+Implementaciones productivas:
+- `ClobOrderBookSource`: un par YES/NO.
+- `MultiClobOrderBookSource`: N pares YES/NO con rotación round-robin y descarte de pares inválidos (404 orderbook).
 
-- `models.py`
-  - DTOs/dataclasses del dominio (`MarketTick`, `Inventory`, `Fill`, `BotMetrics`).
+## 2.2 Orquestación
+- `factory.build_bot()`:
+  - valida modo `api`, filtros y disponibilidad de orderbooks;
+  - instancia `MM001Bot(data_source=...)` con `ClobOrderBookSource` o `MultiClobOrderBookSource`.
+- `launcher.main()`:
+  - parsea CLI,
+  - ejecuta loop de runs,
+  - escribe summary y logs agregados.
 
-- `strategy.py`
-  - Núcleo de pricing:
-    - `fee_equivalent(notional, price, bps)`
-    - `minimum_net_spread(price)`
-    - `reservation_price(mid, inventory)`
-    - `build_quotes(...)`
-
-- `bot.py`
-  - Fuentes de mercado (simulada/CLOB) + loop de ciclos + cálculo de métricas + generación de summary.
-
-- `factory.py`
-  - Composición/DI: instancia `MM001Bot` con data source correcta según config.
-
-- `launcher.py`
-  - Orquestación operacional: parseo args, loop infinito/cotado, persistencia de logs agregados.
-
-### Algoritmo clave
-Por ciclo en `run_all()`:
-1. Obtiene `tick` desde `data_source.next_tick`.
-2. Construye quotes con reservation price + spread mínimo neto.
-3. Simula maker round-trip (buy+sell) y suma `spread_pnl`.
-4. Modela rebates/rewards esperados sobre fee equivalent.
-5. Con probabilidad `TAKER_FRACTION`, agrega costo taker.
-6. Evalúa condiciones de edge para `merge_pnl` y `split_sell_pnl`.
-7. Actualiza KPIs de performance/inventario y persiste fila CSV.
-
-### Datos persistidos (DB)
-No se crean tablas nuevas en este módulo; persistencia actual es por archivos:
-- `ticks.csv`
-- `simulation_summary.json`
-- logs `*.jsonl` y `*.log`
-
-### Dependencias de terceros
-- `py_clob_client`: consulta markets/orderbooks en API mode.
-- `tenacity`: retry en fetch de orderbook.
-- `websockets` (opcional): stream de updates de market.
-
-### Edge cases documentados
-- Websocket no disponible/falla: fallback a polling de orderbook vía REST.
-- Orderbook vacío para token: lanza `ValueError`.
-- Sin `--all`: `SystemExit` controlado.
-- Filtros de mercado/token IDs no resolubles: `ValueError` en factory.
+## 2.3 Núcleo de estrategia
+- `strategy.py`:
+  - `fee_equivalent`, `minimum_net_spread`, `reservation_price`, `build_quotes`.
+- `bot.MM001Bot`:
+  - `run_all(output_dir)` para ciclo completo,
+  - `_simulate_fill_and_pnl(...)` para economía del ciclo.
 
 ---
 
-## 4) Implement testing and security measures
+## 3. Flujo de ejecución detallado
 
-### Testing objetivo
-- Cobertura funcional sobre:
-  - fórmulas de strategy,
-  - construcción de bot por factory,
-  - flujo launcher,
-  - simulación end-to-end.
+## 3.1 Construcción de bot
+1. `build_bot()` valida `MM001_ORDERBOOK_SOURCE == "api"`; cualquier otro valor falla.
+2. Evalúa filtros de mercado (`CURRENT_MARKET_CATEGORY`, `CURRENT_MARKET_SLUG`, include/exclude).
+3. Si `YES_TOKEN_ID/NO_TOKEN_ID` válidos tienen orderbook: usa ese par.
+4. Si no, resuelve pares desde mercados remotos (`get_simplified_markets`) y verifica orderbook por token.
+5. Devuelve:
+   - `MM001Bot(data_source=ClobOrderBookSource)` si hay 1 par.
+   - `MM001Bot(data_source=MultiClobOrderBookSource)` si hay múltiples.
 
-### Tipos de test recomendados
-- **Unit tests**: `fee_equivalent`, `minimum_net_spread`, `reservation_price`, parseo token IDs/filtros.
-- **Regression tests**: run determinista con seed fija (`SIMULATION_RANDOM_SEED`).
-- **CLI smoke tests**: ejecución `--all --max-runs 1` y validación de artefactos.
+## 3.2 Obtención de tick (`ClobOrderBookSource.next_tick`)
+1. `refresh_cache()` intenta mantener estado caliente:
+   - si hay mids recientes vía WS (<2s), reutiliza caché.
+   - si no, hace fetch paralelo REST de YES y NO (`asyncio.gather`).
+2. `_book_mid(token)` calcula mid desde mejor bid/ask; si falta un lado, usa el disponible; si ambos faltan, error.
+3. Retorna `MarketTick(cycle, yes_mid, no_mid, spread, market_id)`.
 
-### Seguridad para ship (alcance actual)
-- No envía órdenes live desde MM001 (simulación).
-- No requiere llaves privadas para funcionamiento base.
-- Riesgo operativo principal: dependencia de disponibilidad CLOB/WS en API mode.
+## 3.3 Gestión multi-mercado (`MultiClobOrderBookSource`)
+1. `refresh_cache()` recorre fuentes activas.
+2. Si una fuente devuelve error 404 de orderbook inexistente, se elimina del pool.
+3. `next_tick()` rota con cursor round-robin.
+4. Si todas se eliminan, error terminal: `no hay orderbooks configurados`.
 
-### Side effects potenciales
-- Aumentar frecuencia del loop o mercados simultáneos puede elevar llamadas a CLOB.
-- Cambios en filtros de mercado pueden alterar universo de token IDs elegibles.
+## 3.4 Ciclo de negocio (`MM001Bot.run_all`)
+Por cada ciclo:
+1. Lee `tick` desde `data_source`.
+2. Calcula quotes con `build_quotes(tick, inventory)`.
+3. Ejecuta `_simulate_fill_and_pnl`:
+   - registra órdenes abiertas/ejecutadas por market,
+   - aplica maker fill,
+   - opcionalmente aplica taker fill por `TAKER_FRACTION`,
+   - evalúa edge de `merge` y `split sell`.
+4. Actualiza métricas de ciclo (win/loss/breakeven).
+5. Persiste fila en `ticks.csv`.
 
----
-
-## 5) Plan the work
-
-### Estimación incremental (LLD -> ejecución)
-- **Fase 1 (0.5d):** consolidar requerimientos y límites (simulated vs api).
-- **Fase 2 (1d):** hardening de tests de regresión/factory con casos de mercados múltiples.
-- **Fase 3 (0.5d):** observabilidad adicional de errores por token/market.
-- **Fase 4 (0.5d):** documentación operativa y handoff.
-
-### Milestones
-1. LLD aprobado.
-2. Regression suite estable y determinista.
-3. Runbook operativo actualizado.
-4. Validación final de DoD.
-
-### Riesgos y alternativas
-- **Riesgo principal:** APIs externas (latencia, 404, payloads cambiantes).
-  - **Ruta alternativa:** ejecutar en modo `simulated` para continuidad.
-- **Riesgo secundario:** datos WS inconsistentes.
-  - **Ruta alternativa:** fallback automático a REST polling.
-
-### Definition of Done
-**Requerido**
-- Ejecución estable con `--all`.
-- Reportes y logs completos por iteración.
-- Tests MM001 en verde.
-
-**Opcional**
-- Extender métricas por market en modo multi-orderbook.
-- Exportar reportes en formato adicional (parquet/sqlite).
+Al final de la corrida:
+- calcula KPIs agregados (`win_rate`, `reward_to_fee_ratio`, `inventory_utilization_ratio`, etc.),
+- arma `market_orderbooks` con open/executed/canceled/closed por `market_id`,
+- retorna summary dict para serialización.
 
 ---
 
-## 6) Identify ripple effects
+## 4. Modelo de datos interno
 
-### Fuera del código
-- Actualizar documentación de operación (`README`, runbook interno).
-- Comunicar a usuarios internos cuándo usar `api` vs `simulated`.
-- Alinear monitoreo de archivos de salida en pipelines externos.
+## 4.1 Estructuras principales
+- `MarketTick`: `cycle`, `yes_mid`, `no_mid`, `spread`, `market_id`.
+- `Inventory`: `yes`, `no`, `cash`, `net_yes`.
+- `Fill`: `side`, `qty`, `price`, `maker`.
+- `BotMetrics`: acumuladores de PnL y contadores de performance.
 
-### Sistemas externos impactados
-- Integración con CLOB (disponibilidad y límites de API).
-- Dashboards o scripts que consumen `simulation_summary.json`/`ticks.csv`.
+## 4.2 Invariantes operativos
+- `MM001Bot` requiere `data_source` explícito.
+- Cada ciclo ejecuta exactamente 1 maker fill (`fill_count += 1`) y 0..1 taker fill adicional.
+- `maker_notional` y `fill_count` son no decrecientes.
+- `market_orderbooks` se construye como unión de llaves de open/canceled/closed/executed.
 
 ---
 
-## 7) Understand the broader context
+## 5. Configuración crítica
 
-### Limitaciones actuales
-- Modelo de fills simplificado (no microestructura ni parcialidades realistas).
-- Inventario no tiene hard-stop estricto por `MAX_ABS_INVENTORY`.
-- Persistencia en archivos (no event store transaccional).
+Variables de mayor impacto:
+- Fuente y mercado:
+  - `MM001_ORDERBOOK_SOURCE` (debe ser `api`),
+  - `MM001_YES_TOKEN_ID`, `MM001_NO_TOKEN_ID`,
+  - filtros `CURRENT_MARKET_CATEGORY`, `CURRENT_MARKET_SLUG`, `MARKET_INCLUDE_ONLY`, `MARKET_EXCLUDED_PREFIXES`.
+- Economía del modelo:
+  - `SIMULATION_SIZE`, `TAKER_FRACTION`, `FEE_RATE_BPS`,
+  - `ENABLE_PAIR_MERGE`, `MERGE_EDGE_MIN`,
+  - `ENABLE_SPLIT_SELL`, `SPLIT_SELL_EDGE_MIN`.
+- Ejecución:
+  - `SIMULATION_CYCLES`, `SIMULATION_RANDOM_SEED`,
+  - `MAX_SIMULTANEOUS_OB`, `MARKET_WS_URL`.
 
-### Extensiones futuras
-- Motor de matching/fills más realista.
-- Adaptador websocket robusto con reconciliación incremental.
-- Policy optimizer multi-mercado con asignación de capital.
+---
 
-### Consideraciones de costo/tiempo
-- La mayor incertidumbre está en integraciones externas (CLOB/WS), no en la lógica local.
-- Prioridad MVP: mantener simplicidad y reproducibilidad por encima de complejidad prematura.
+## 6. Persistencia y artefactos
 
-### Moonshot ideas
-- Optimización de quoting con calibración Avellaneda-Stoikov por régimen de volatilidad.
-- Coordinación cross-market para capturar full-set arbitrage inter-mercado.
+No hay DB obligatoria en este módulo.
+Salida de ejecución:
+- `ticks.csv`: trazabilidad por ciclo.
+- `simulation_summary.json`: snapshot de KPIs finales.
+- `cycle_aggregates.jsonl` y logs `*.log`: observabilidad operacional.
+
+---
+
+## 7. Manejo de fallos y degradación
+
+- WS caído/no disponible:
+  - continúa con REST polling sin abortar proceso.
+- Error 404 de orderbook en modo multi:
+  - descarta par afectado y sigue con restantes.
+- Sin pares válidos:
+  - falla construcción o `next_tick` con error explícito.
+- Orderbook vacío por token:
+  - `ValueError` para cortar ciclo inválido.
+
+---
+
+## 8. Testing técnico recomendado (alineado al código)
+
+- Unit:
+  - funciones de `strategy.py`,
+  - parseo/resolución de tokens en `factory.py`,
+  - ramas de descarte 404 en `MultiClobOrderBookSource`.
+- Integración local:
+  - `launcher --all --max-runs 1` con doubles de CLOB.
+- Regresión:
+  - seed fija y verificación de shape de summary + archivos emitidos.

@@ -112,8 +112,6 @@ def build_bot(db_path: str | None = None) -> MM001Bot:
     _ = db_path
     if config.ORDERBOOK_SOURCE != "api":
         raise ValueError("MM001 only supports real API orderbook data; simulated orderbook source is disabled")
-    if not _is_market_enabled():
-        raise ValueError("MM001 api mode requires CURRENT_MARKET_CATEGORY/CURRENT_MARKET_SLUG enabled by filters")
     yes_token_id = config.YES_TOKEN_ID
     no_token_id = config.NO_TOKEN_ID
 
@@ -130,9 +128,8 @@ def build_bot(db_path: str | None = None) -> MM001Bot:
             )
         )
 
-    resolved_pairs = _resolve_token_ids_from_remote_market(
-        config.CURRENT_MARKET_SLUG, max_markets=config.MAX_SIMULTANEOUS_OB
-    )
+    target_slug = config.CURRENT_MARKET_SLUG if _is_market_enabled() else ""
+    resolved_pairs = _resolve_token_ids_from_remote_market(target_slug, max_markets=config.MAX_SIMULTANEOUS_OB)
     if not resolved_pairs:
         if has_configured_pair:
             raise ValueError(

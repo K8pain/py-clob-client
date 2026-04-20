@@ -67,12 +67,12 @@ MM001 es un bot MVP que ejecuta ciclos de cotización two-sided, simula fills, a
 - El bot consume orderbooks reales y mantiene el mismo esquema de reportes.
 
 #### Alternative flows
-- Si el filtro de mercado bloquea el slug/categoría, la factory falla temprano con error explícito.
-- Si no hay token IDs y no puede resolver desde mercados remotos, la factory corta con `ValueError`.
+- Si el slug/categoría configurado está bloqueado por filtros, la factory ignora ese target y autodiscovera mercados válidos hasta `MAX_SIMULTANEOUS_OB`.
+- Si no hay token IDs y no puede resolver ningún par YES/NO con orderbook remoto, la factory corta con `ValueError`.
 - Si falla una iteración del loop, `launcher` registra excepción y continúa siguiente iteración.
 
 ### Impacto de UI/estructura
-No hay UI web; la UX es CLI + archivos de reporte + logs operativos.
+No hay UI web (ni se contempla para MM001); el bot corre como servicio remoto en Linux usando CLI + archivos de reporte + logs operativos.
 - Navegación funcional: `launcher` → artefactos en `var/mm001/`.
 - “Pantalla” principal del usuario: tabla de métricas en log y JSON summary por iteración.
 
@@ -86,6 +86,7 @@ No hay UI web; la UX es CLI + archivos de reporte + logs operativos.
 ## 3) Understand the technical needs
 
 ### Detalles técnicos clave
+- `net_yes_inventory` = `Inventory.yes - Inventory.no` (posición neta en YES). No existe campo `net_no`; para lectura de lado NO se usa `unpaired_no_qty_total` o las posiciones brutas `yes/no`.
 - **Algoritmo de spread neto mínimo**:
   `taker_exit + adverse_buffer + latency_buffer - rebate_expected - reward_expected`, con piso `MIN_SPREAD_FLOOR`.
 - **Algoritmo de reservation price**:

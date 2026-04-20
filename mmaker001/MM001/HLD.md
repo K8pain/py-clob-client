@@ -21,7 +21,7 @@ MM001 es un motor de **paper trading de market making binario (YES/NO)** orienta
 ## 1) Define what you’re building
 
 ### Qué es la aplicación/feature
-MM001 es un bot MVP que ejecuta ciclos de cotización two-sided, simula fills, acumula métricas de desempeño y exporta artefactos operativos (`ticks.csv`, `simulation_summary.json`, logs) en cada iteración del launcher.
+MM001 es un bot MVP que ejecuta ciclos de cotización two-sided, aplica fills sintéticos, acumula métricas de desempeño y exporta artefactos operativos (`ticks.csv`, `run_summary.json`, logs) en cada iteración del launcher.
 
 ### Para quién es
 - Trader cuantitativo que quiere validar hipótesis de captura de spread.
@@ -79,7 +79,7 @@ No hay UI web (ni se contempla para MM001); el bot corre como servicio remoto en
 ### Mockup/wireframe (operativo CLI)
 - Entrada: flags de launcher (`--all`, `--max-runs`, rutas de logs/reports).
 - Proceso: iteración continua + `sleep` con `refresh_cache`.
-- Salida: `simulation_summary.json` + `cycle_aggregates.jsonl` + `ticks.csv` + logs launcher/trades.
+- Salida: `run_summary.json` + `cycle_aggregates.jsonl` + `ticks.csv` + logs launcher/trades.
 
 ---
 
@@ -236,4 +236,4 @@ No hay UI web (ni se contempla para MM001); el bot corre como servicio remoto en
 
 `MM001Bot` -> `Strategy` (pricing/quoting) -> `Inventory + Metrics`
 
-`MM001Bot` -> `Reports/Logs` (`ticks.csv`, `simulation_summary.json`, `cycle_aggregates.jsonl`, `summary_prints.jsonl`, launcher/trades logs)
+`MM001Bot` -> `Reports/Logs` (`ticks.csv`, `run_summary.json`, `cycle_aggregates.jsonl`, `summary_prints.jsonl`, launcher/trades logs)

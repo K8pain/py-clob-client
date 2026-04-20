@@ -122,7 +122,7 @@ def _run_iteration(
     logger: logging.Logger,
 ) -> dict[str, float]:
     summary = bot.run_all(output_dir=output_dir)
-    summary_path = output_dir / "simulation_summary.json"
+    summary_path = output_dir / "run_summary.json"
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     _append_trades_log(output_dir, trades_log_file, loop_iteration)
     _append_cycle_aggregate_log(cycle_log_file, loop_iteration, summary)

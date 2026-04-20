@@ -138,7 +138,7 @@ Variables de mayor impacto:
 No hay DB obligatoria en este módulo.
 Salida de ejecución:
 - `ticks.csv`: trazabilidad por ciclo.
-- `simulation_summary.json`: snapshot de KPIs finales.
+- `run_summary.json`: snapshot de KPIs finales.
 - `cycle_aggregates.jsonl` y logs `*.log`: observabilidad operacional.
 
 ---

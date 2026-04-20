@@ -30,14 +30,6 @@ class MarketDataSource(Protocol):
 
 
 @dataclass
-class SimulatedOrderBookSource:
-    def next_tick(self, cycle: int, previous_mid: float, rng: random.Random) -> MarketTick:
-        shock = rng.uniform(-config.SIMULATION_VOLATILITY, config.SIMULATION_VOLATILITY)
-        mid = max(0.05, min(0.95, previous_mid + shock))
-        return MarketTick(cycle=cycle, yes_mid=mid, no_mid=1.0 - mid, spread=0.01, market_id="SIMULATED_MM001")
-
-
-@dataclass
 class ClobOrderBookSource:
     host: str
     yes_token_id: str
@@ -246,10 +238,10 @@ class MultiClobOrderBookSource:
 
 @dataclass
 class MM001Bot:
+    data_source: MarketDataSource
     cycles: int = config.SIMULATION_CYCLES
     inventory: Inventory = field(default_factory=Inventory)
     metrics: BotMetrics = field(default_factory=BotMetrics)
-    data_source: MarketDataSource = field(default_factory=SimulatedOrderBookSource)
     market_open_orders: dict[str, int] = field(default_factory=dict)
     market_canceled_orders: dict[str, int] = field(default_factory=dict)
     market_closed_orders: dict[str, int] = field(default_factory=dict)

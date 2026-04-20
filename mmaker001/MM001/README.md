@@ -13,7 +13,7 @@ MM001 es un motor **paper trading** orientado a validar una operativa de **marke
 ## 1) Qué es, para quién y qué problema resuelve
 
 ### Qué es
-Un motor de simulación determinista que cotiza dos lados (YES/NO), evalúa PnL por componentes y exporta reportes.
+Un motor de paper trading determinista que cotiza dos lados (YES/NO), evalúa PnL por componentes y exporta reportes.
 
 ### Para quién
 Para operador/quant/dev que quiere validar si el modelo de maker está capturando edge por:
@@ -57,7 +57,7 @@ El launcher imprime un JSON con métricas agregadas.
 ## Paso 3 — Revisar artefactos
 Se generan en `var/mm001/reports/`:
 - `ticks.csv`: trazabilidad ciclo a ciclo (mids, quotes, inventario neto)
-- `simulation_summary.json`: resumen final de PnL por componente
+- `run_summary.json`: resumen final de PnL por componente
 - `cycle_aggregates.jsonl`: snapshot por iteración del loop (timestamp + summary)
 
 Y logs operativos tipo Madawc:
@@ -127,7 +127,7 @@ Activa captura de edge cuando `YES + NO < 1`.
 ### `ENABLE_SPLIT_SELL` + `SPLIT_SELL_EDGE_MIN`
 Activa lógica espejo cuando `YES + NO > 1` para inventario pre-split.
 
-## P1 — Dinámica de simulación
+## P1 — Dinámica del loop
 
 ### `SIMULATION_CYCLES`
 Cantidad de ciclos simulados.
@@ -138,7 +138,7 @@ Rango de shock por ciclo.
 - Subirlo incrementa stress de quotes y sensibilidad de inventario.
 
 ### `SIMULATION_SIZE`
-Tamaño nocional por simulación de fill.
+Tamaño nocional por fill sintético.
 - Escala directamente el impacto monetario por trade.
 
 ### `TAKER_FRACTION`
@@ -150,7 +150,7 @@ Fracción probabilística de salidas con coste taker.
 ## 4) Funcionamiento detallado (internals)
 
 ## 4.1 Launcher y factory
-- `launcher.py` parsea flags, exige `--all`, carga `factory` y ejecuta simulación en loop continuo (con `--max-runs` opcional para cortar).
+- `launcher.py` parsea flags, exige `--all`, carga `factory` y ejecuta el loop en continuo (con `--max-runs` opcional para cortar).
 - Añade logging operativo (`--log-file`, `--trades-log-file`, `--aggregate-log-file`, `--log-level`) para seguimiento dinámico estilo Madawc.
 - `factory.py` retorna `MM001Bot` (contrato simple compatible con launcher).
 
@@ -183,7 +183,7 @@ Por ciclo:
 
 Al final:
 - calcula `directional_mtm` residual,
-- arma `simulation_summary.json`,
+- arma `run_summary.json`,
 - incluye `taker_trades` en el resumen.
 
 ---

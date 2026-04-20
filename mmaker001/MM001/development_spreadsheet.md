@@ -15,7 +15,7 @@
 | Prioridad | User story | Happy flow | Flujos alternos |
 |---|---|---|---|
 | P0 | Como operador quiero lanzar un comando único para correr toda la simulación. | `python -m mmaker001.MM001.launcher --all --factory mmaker001.MM001.factory:build_bot` genera resultados. | Si falta `--all`, el launcher corta con mensaje explícito. |
-| P0 | Como analista quiero un resumen de PnL por fuente económica. | Se exporta `simulation_summary.json` con breakdown completo. | Si hay edge insuficiente en merge/split, los componentes quedan en 0. |
+| P0 | Como analista quiero un resumen de PnL por fuente económica. | Se exporta `run_summary.json` con breakdown completo. | Si hay edge insuficiente en merge/split, los componentes quedan en 0. |
 | P1 | Como dev quiero trazabilidad por ciclo para revisar inventario y skew. | Se exporta `ticks.csv` con mids, quotes y net inventory. | Si inventario deriva, se refleja en `net_yes`. |
 | P2 | Como PM quiero priorización clara de roadmap. | Este spreadsheet ordena MVP vs siguiente fase. | N/A |
 
@@ -45,7 +45,7 @@
 | Pri | Tarea | Estimación | Entregable | DoD |
 |---|---|---:|---|---|
 | P0 | Crear paquete `MM001` y contrato launcher/factory | 0.5d | Comando `--all` operativo | Corre en local y genera reportes |
-| P0 | Implementar economics core de market maker | 0.5d | `strategy.py` + `bot.py` con PnL breakdown | `simulation_summary.json` con componentes |
+| P0 | Implementar economics core de market maker | 0.5d | `strategy.py` + `bot.py` con PnL breakdown | `run_summary.json` con componentes |
 | P0 | Spreadsheet técnico completo | 0.5d | Este documento | Cobertura 1–7 solicitada |
 | P1 | Tests unitarios y regresión | 0.5d | `tests/MM001/*` | Fórmulas y run determinista verificados |
 | P2 | Integración con datos reales CLOB/Gamma | 1–2d | adapter mode paper-live-data | Sin trading real, con snapshots reales |

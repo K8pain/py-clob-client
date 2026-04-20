@@ -402,7 +402,7 @@ def test_sleep_with_refresh_calls_data_source_refresh(monkeypatch: pytest.Monkey
     assert bot.data_source.calls == 3
 
 
-def test_launcher_main_writes_simulation_summary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_launcher_main_writes_run_summary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "ORDERBOOK_SOURCE", "api")
     monkeypatch.setattr(config, "YES_TOKEN_ID", "yes")
     monkeypatch.setattr(config, "NO_TOKEN_ID", "no")
@@ -445,7 +445,7 @@ def test_launcher_main_writes_simulation_summary(tmp_path: Path, monkeypatch: py
     )
     main()
 
-    summary_path = out_dir / "simulation_summary.json"
+    summary_path = out_dir / "run_summary.json"
     assert summary_path.exists()
     payload = json.loads(summary_path.read_text(encoding="utf-8"))
     assert "total_realized" in payload
@@ -517,7 +517,7 @@ def test_format_launcher_metrics_table_includes_point9_metrics() -> None:
             "adverse_taker_ratio": 0.1,
             "inventory_utilization_ratio": 0.03,
             "current_inventory_state": {"unpaired_yes_qty_total": 1.0},
-            "largest_inventory_stuck_market": {"market_id": "SIMULATED_MM001", "unpaired_qty": 1.0},
+            "largest_inventory_stuck_market": {"market_id": "UNKNOWN_MM001", "unpaired_qty": 1.0},
         },
     )
     assert "cumulative_realized_pnl_net" in table
@@ -560,21 +560,21 @@ def test_mm001_statement_coverage_threshold(tmp_path: Path, monkeypatch: pytest.
         monkeypatch.setattr(config, "NO_TOKEN_ID", "no")
         monkeypatch.setattr(factory_module, "_pair_has_orderbooks", lambda *_args, **_kwargs: True)
         _ = build_bot("db.sqlite")
-        bot = MM001Bot(cycles=3, data_source=DeterministicSource(market_id="SIMULATED_MM001"))
+        bot = MM001Bot(cycles=3, data_source=DeterministicSource(market_id="UNKNOWN_MM001"))
         bot.run_all(output_dir=tmp_path / "cov_reports")
-        bot._simulate_fill_and_pnl(tick, q, __import__("random").Random(1), market_id="SIMULATED_MM001")
-        bot._simulate_fill_and_pnl(tick, q, __import__("random").Random(2), market_id="SIMULATED_MM001")
+        bot._simulate_fill_and_pnl(tick, q, __import__("random").Random(1), market_id="UNKNOWN_MM001")
+        bot._simulate_fill_and_pnl(tick, q, __import__("random").Random(2), market_id="UNKNOWN_MM001")
         monkeypatch.setattr(config, "TAKER_FRACTION", 1.0)
         bot.inventory.yes = 0.0
         bot.inventory.no = 20.0
-        bot._simulate_fill_and_pnl(tick, q, __import__("random").Random(2), market_id="SIMULATED_MM001")
+        bot._simulate_fill_and_pnl(tick, q, __import__("random").Random(2), market_id="UNKNOWN_MM001")
         monkeypatch.setattr(config, "TAKER_FRACTION", 0.10)
 
         # trigger alternative branches
         monkeypatch.setattr(config, "ENABLE_PAIR_MERGE", False)
         monkeypatch.setattr(config, "ENABLE_SPLIT_SELL", False)
         monkeypatch.setattr(config, "TAKER_FRACTION", 1.0)
-        bot._simulate_fill_and_pnl(tick, q, __import__("random").Random(1), market_id="SIMULATED_MM001")
+        bot._simulate_fill_and_pnl(tick, q, __import__("random").Random(1), market_id="UNKNOWN_MM001")
         monkeypatch.setattr(config, "ENABLE_PAIR_MERGE", True)
         monkeypatch.setattr(config, "ENABLE_SPLIT_SELL", True)
         monkeypatch.setattr(config, "TAKER_FRACTION", 0.10)

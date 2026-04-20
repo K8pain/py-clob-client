@@ -12,7 +12,7 @@ class MarketTick:
     yes_mid: float
     no_mid: float
     spread: float
-    market_id: str = "SIMULATED_MM001"
+    market_id: str = "UNKNOWN_MM001"
 
 
 @dataclass

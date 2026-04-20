@@ -336,6 +336,8 @@ class MM001Bot:
         )
         adverse_taker_ratio = self.metrics.taker_trades / max(self.metrics.fill_count, 1)
         inventory_utilization_ratio = largest_unpaired_qty / max(config.MAX_ABS_INVENTORY, 1.0)
+        current_market_ids = tuple(self.market_open_orders.keys())
+        stuck_market_id = current_market_ids[0] if current_market_ids and largest_unpaired_qty > 0 else "n/a"
         return {
             "spread_pnl": round(self.metrics.spread_pnl, 4),
             "merge_pnl": round(self.metrics.merge_pnl, 4),
@@ -368,7 +370,7 @@ class MM001Bot:
                 "closed_cycle_count": int(self.metrics.closed_cycle_count),
             },
             "largest_inventory_stuck_market": {
-                "market_id": "SIMULATED_MM001" if largest_unpaired_qty > 0 else "n/a",
+                "market_id": stuck_market_id,
                 "unpaired_qty": round(largest_unpaired_qty, 4),
             },
             "market_orderbooks": self._market_orderbook_summary(),

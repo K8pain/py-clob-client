@@ -1,6 +1,6 @@
 # MM001 (MVP) — Market Maker Paper Trading Simulator
 
-MM001 es un motor **paper trading** orientado a validar una operativa de **market making en mercados binarios** (YES/NO), consumiendo orderbook real vía API CLOB cuando hay token IDs; si no, cae automáticamente en simulación local.
+MM001 es un motor **paper trading** orientado a validar una operativa de **market making en mercados binarios** (YES/NO), consumiendo orderbook real vía API CLOB. Si no hay token IDs configurados, intenta autodiscovery remoto de pares YES/NO con orderbook.
 
 > Ejecuta así (loop continuo para los mercados/token IDs configurados; sin llaves privadas y sin requerir token IDs):
 >
@@ -39,7 +39,7 @@ Así puedes distinguir PnL de **proveer liquidez** versus PnL **direccional resi
 ## 2) Flujo de uso (step by step)
 
 ## Paso 0 — Requisitos
-No requiere llaves privadas (modo público), pero sí token IDs YES/NO para leer book real.
+No requiere llaves privadas (modo público). Puede operar con token IDs YES/NO explícitos o resolverlos por autodiscovery remoto.
 
 ## Paso 1 — Ejecutar bot en loop continuo
 ```bash

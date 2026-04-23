@@ -28,6 +28,14 @@ def test_token_has_orderbook_returns_false_for_404() -> None:
     assert factory_module._token_has_orderbook(DummyClient(), "missing") is False
 
 
+def test_token_has_orderbook_returns_false_for_transient_request_error() -> None:
+    class DummyClient:
+        def get_order_book(self, _token_id: str):
+            raise PolyApiException(error_msg="Request exception: ReadTimeout: The read operation timed out")
+
+    assert factory_module._token_has_orderbook(DummyClient(), "slow-token") is False
+
+
 def test_resolve_token_ids_from_remote_market_skips_pairs_without_orderbook(monkeypatch) -> None:
     class DummyClient:
         def __init__(self, host: str) -> None:

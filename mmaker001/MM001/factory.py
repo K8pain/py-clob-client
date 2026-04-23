@@ -104,7 +104,19 @@ def _token_has_orderbook(client: ClobClient, token_id: str) -> bool:
     except PolyApiException as exc:
         if exc.status_code == 404:
             return False
+        if _is_transient_orderbook_check_error(exc):
+            return False
         raise
+
+
+def _is_transient_orderbook_check_error(exc: PolyApiException) -> bool:
+    if exc.status_code is not None:
+        return False
+    message = str(exc)
+    return any(
+        marker in message
+        for marker in ("ReadTimeout", "ConnectTimeout", "RemoteProtocolError", "Request exception!")
+    )
 
 
 def build_bot(db_path: str | None = None) -> MM001Bot:

@@ -64,7 +64,7 @@ def request(endpoint: str, method: str, headers=None, data=None):
         headers = overloadHeaders(method, headers)
         try:
             resp = _send_request()
-        except httpx.RemoteProtocolError:
+        except (httpx.RemoteProtocolError, httpx.ReadTimeout):
             _reset_http_client()
             resp = _send_request()
 
@@ -76,8 +76,8 @@ def request(endpoint: str, method: str, headers=None, data=None):
         except ValueError:
             return resp.text
 
-    except httpx.RequestError:
-        raise PolyApiException(error_msg="Request exception!")
+    except httpx.RequestError as exc:
+        raise PolyApiException(error_msg=f"Request exception: {exc.__class__.__name__}: {exc}")
 
 
 def post(endpoint, headers=None, data=None):

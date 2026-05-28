@@ -1,0 +1,60 @@
+DEV TECH SHEET (TALIC)
+
+1) BUILD DEFINITION
+- Feature: API bot architecture and implementation guide.
+- Audience: developers implementing resilient autonomous bots.
+- Problem solved: removes ambiguity and enforces safe, deterministic behavior.
+- Runtime: event-driven or scheduled loop with bounded retries and safe degradation.
+
+2) USER EXPERIENCE DESIGN (OPERATORS/DEVS)
+- Happy flow: bot processes events, validates inputs/responses, mutates state only in MODE_NORMAL.
+- Alternative flow: transient errors trigger retries; exhaustion degrades to MODE_READ_ONLY; unrecoverable issues enter MODE_IDLE_SAFE.
+- UI impact: none (no end-user UI in scope).
+
+3) TECHNICAL NEEDS
+- Data model requirements:
+  - mode_state (enum: NORMAL, RETRYING, READ_ONLY, IDLE_SAFE)
+  - idempotency_key per mutating operation
+  - operation ledger for replay safety
+- Core components:
+  - input validator
+  - external response validator
+  - idempotent command handler
+  - retry policy adapter (tenacity)
+  - degradation mode controller
+  - structured logger + metrics emitter
+- Dependency notes:
+  - tenacity for retry/backoff
+  - structured logging stack
+  - metrics backend integration
+
+4) TESTING & SECURITY
+- Unit tests:
+  - mode transition rules
+  - idempotency invariants
+  - retry classification (transient vs permanent)
+- Regression tests:
+  - restart + replay produces identical state
+  - failed mutations do not alter state
+- Security checks:
+  - no dynamic eval/reflection
+  - assertion paths active in production builds
+
+5) WORK PLAN (MVP)
+- Milestone 1: contracts + enums + invariants.
+- Milestone 2: retry/degradation engine.
+- Milestone 3: idempotent mutation pipeline.
+- Milestone 4: observability and operational metrics.
+- Risks:
+  - external API schema drift
+  - retry storms under sustained outages
+
+6) RIPPLE EFFECTS
+- Update implementation docs for mode semantics.
+- Update runbooks for recovery conditions.
+- Communicate operational guarantees to stakeholders.
+
+7) BROADER CONTEXT
+- Current limitation: single-bot/single-domain scope.
+- Future extension: multi-domain orchestration with strict isolation boundaries.
+- Moonshot: formally verify critical invariants for state transitions.

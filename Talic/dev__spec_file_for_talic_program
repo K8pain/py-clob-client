@@ -1,0 +1,291 @@
+Development Tech Sheet — MVP
+
+System: Hyperliquid spot + Polymarket binary/range overlays
+
+1. Scope
+
+Build an MVP that:
+	•	reads spot market data and submits spot orders on Hyperliquid,
+	•	reads market/orderbook data and optionally submits orders on Polymarket,
+	•	evaluates only spot + Polymarket overlay combinations,
+	•	never stops on recoverable API failures,
+	•	supports paper mode first, then live mode. Hyperliquid exposes public API, info, exchange, WebSocket, and mainnet/testnet endpoints. Polymarket separates public market data from authenticated CLOB trading, with public read endpoints and authenticated order/cancel flows.  ￼
+
+2. MVP module tree
+
+project/
+├── auth/
+│   ├── hyperliquid_auth.py
+│   └── polymarket_auth.py
+├── api/
+│   ├── hyperliquid_api.py
+│   └── polymarket_api.py
+├── config/
+│   ├── settings.py
+│   ├── strategy_params.py
+│   └── lookup_params.py
+├── helper_module.py
+├── rpc_handlers.py
+├── strategies.py
+└── main.py
+
+3. Module responsibilities
+
+auth/hyperliquid_auth.py
+
+Purpose: signing, nonce handling, wallet setup.
+
+MVP responsibilities
+	•	load env and credentials
+	•	support mainnet/testnet
+	•	sign exchange actions
+	•	manage nonce source
+	•	expose authenticated client/session factory
+
+Hyperliquid documents API wallets, nonces, signing, and distinct mainnet/testnet base URLs.  ￼
+
+auth/polymarket_auth.py
+
+Purpose: wallet auth + CLOB auth.
+
+MVP responsibilities
+	•	load private key
+	•	derive/load L2 credentials
+	•	build authenticated headers for trading
+	•	separate public read vs authenticated trading
+
+Polymarket uses two-level auth: L1 with wallet private key and L2 with apiKey, secret, passphrase; public market data endpoints do not require auth, but CLOB trading endpoints do.  ￼
+
+api/hyperliquid_api.py
+
+Purpose: thin venue wrapper.
+
+MVP functions
+	•	get_spot_meta()
+	•	get_all_mids()
+	•	get_l2_book()
+	•	get_spot_state()
+	•	place_spot_order()
+	•	cancel_order()
+	•	get_order_status()
+
+Hyperliquid’s core API surface for this is info, exchange, and WebSocket.  ￼
+
+api/polymarket_api.py
+
+Purpose: thin venue wrapper.
+
+MVP functions
+	•	list_markets()
+	•	get_market_by_slug()
+	•	get_order_book()
+	•	get_midpoint()
+	•	get_spread()
+	•	get_prices_history()
+	•	post_order()
+	•	cancel_order()
+
+Polymarket exposes markets, orderbook/pricing, orders, trades, and WebSocket channels in the documented API.  ￼
+
+helper_module.py
+
+Purpose: pure calculations and shared utilities.
+
+MVP functions
+	•	compute_spot_quantity()
+	•	compute_spot_pnl()
+	•	compute_binary_leg_pnl()
+	•	compute_combined_pnl()
+	•	compute_risk_cost_pct()
+	•	compute_backup_efficiency()
+	•	is_market_stale()
+	•	round_to_tick_size()
+
+rpc_handlers.py
+
+Purpose: transport normalization.
+
+MVP responsibilities
+	•	map raw responses into internal models
+	•	classify errors
+	•	apply retry/backoff
+	•	normalize venue-specific exceptions
+
+strategies.py
+
+Purpose: evaluate and filter setups.
+
+MVP strategies
+	•	evaluate_spot_plus_range_with_backup()
+	•	discard_unhedgeable_combinations()
+
+main.py
+
+Purpose: orchestration only.
+
+MVP loop
+	1.	load config
+	2.	init auth
+	3.	init APIs
+	4.	refresh lookup params
+	5.	fetch market snapshots
+	6.	evaluate strategies
+	7.	paper-execute or live-execute
+	8.	reconcile state
+	9.	continue
+
+4. Required configuration
+
+config/settings.py
+
+Runtime
+	•	environment
+	•	base URLs
+	•	timeouts
+	•	retry policy
+	•	paper/live toggle
+	•	logging config
+
+config/strategy_params.py
+
+Risk filters
+	•	max_risk_cost_pct
+	•	max_backup_cost_ratio
+	•	min_backup_efficiency
+	•	max_market_staleness_ms
+	•	min_depth_usd
+	•	min_pm_liquidity
+
+config/lookup_params.py
+
+Venue mappings
+	•	Hyperliquid asset / spot metadata cache
+	•	Polymarket market_slug, condition_id, token_id_yes, token_id_no, expiry, tick size
+
+Polymarket’s market and CLOB APIs require market discovery and token identifiers; Hyperliquid requires asset metadata and spot universe lookup.  ￼
+
+5. Essential formulas
+
+Use only these in MVP:
+
+Spot leg
+	•	spot_qty = spot_notional / entry_spot
+	•	spot_pnl = spot_qty * (exit_spot - entry_spot)
+
+Polymarket long binary/range leg
+	•	max_loss = stake
+	•	max_profit = stake * ((1 / entry_price) - 1)
+
+Combined
+	•	combined_pnl = spot_pnl + pm_leg_pnl - fees - slippage
+
+Risk filters
+	•	risk_cost_pct = probable_drawdown / deployed_capital
+	•	backup_efficiency = unhedged_drawdown - hedged_drawdown
+	•	backup_cost_ratio = backup_cost / gross_target_payoff
+
+6. Essential API endpoints
+
+Hyperliquid
+
+Need in MVP
+	•	POST /info
+	•	POST /exchange
+	•	WebSocket
+
+Hyperliquid documents info, exchange, WebSocket, and SDK access.  ￼
+
+Polymarket
+
+Need in MVP
+	•	GET /markets
+	•	GET /book
+	•	GET /midpoint
+	•	GET /spread
+	•	GET /prices-history
+	•	POST /order
+	•	DEL /order
+	•	Market WS
+	•	User WS
+
+Polymarket documents these market-data and order endpoints, plus WebSocket market and user channels.  ￼
+
+7. Error handling and retries
+
+Error classes
+
+Use normalized classes:
+	•	RetryableApiError
+	•	RateLimitedError
+	•	AuthenticationError
+	•	ValidationError
+	•	InsufficientFundsError
+	•	StaleDataError
+	•	NonRetryableApiError
+
+Retry policy
+
+Hyperliquid
+	•	respect documented rate limits and WebSocket connection limits
+	•	light reads: exponential backoff, short max wait
+	•	trading: max 3 attempts, reconcile before resubmission
+
+Hyperliquid documents weighted REST limits and WebSocket connection/subscription constraints.  ￼
+
+Polymarket
+	•	public reads: short exponential retries
+	•	trading: retry only on timeout, 429, transient server issues
+	•	never blindly resubmit orders without reconciliation
+
+Polymarket distinguishes public reads from authenticated CLOB operations and documents rate-limit behavior in the API docs.  ￼
+
+Non-stop runtime rule
+
+Program must never exit on recoverable errors.
+Instead:
+	•	log
+	•	retry
+	•	degrade venue
+	•	skip cycle
+	•	continue loop
+
+8. MVP strategy policy
+
+MVP should support only one production candidate class:
+
+spot_plus_pm_range_with_backup
+
+Structure:
+	•	buy spot on Hyperliquid
+	•	buy primary Polymarket range
+	•	optionally buy lower backup range
+	•	discard if downside is too expensive or not backupeable
+
+This keeps the first version narrow, testable, and aligned with the filtering logic already defined.
+
+9. Build order
+	1.	config/
+	2.	auth/
+	3.	api/
+	4.	rpc_handlers.py
+	5.	helper_module.py
+	6.	strategies.py
+	7.	main.py
+
+10. Out of scope for MVP
+	•	multiple concurrent strategies
+	•	perps/futures
+	•	advanced portfolio optimization
+	•	auto-hedging ladders
+	•	cross-chain funding automation
+	•	database persistence beyond basic local state
+
+11. MVP deliverable
+
+At MVP completion, system must:
+	•	connect to both venues,
+	•	read spot and market data,
+	•	evaluate one valid strategy family,
+	•	filter invalid combinations,
+	•	run in paper mode without stopping on transient API failures,
+	•	be ready for controlled live execution.

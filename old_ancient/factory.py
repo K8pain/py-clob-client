@@ -107,9 +107,18 @@ class PublicGammaClient:
     def _fetch_seed_event_markets(self) -> list[dict]:
         if not self.seed_event_slug:
             return []
-        url = f"{self.base_url.rstrip('/')}/events/slug/{self.seed_event_slug}"
-        response = httpx.get(url, timeout=self.timeout_seconds)
-        response.raise_for_status()
+        slug_value = self.seed_event_slug.strip()
+        if not slug_value:
+            return []
+        slug_url = f"{self.base_url.rstrip('/')}/events/slug/{slug_value}"
+        request_kwargs = {"timeout": self.timeout_seconds}
+        try:
+            response = httpx.get(slug_url, **request_kwargs)
+            response.raise_for_status()
+        except httpx.HTTPError:
+            query_url = f"{self.base_url.rstrip('/')}/events"
+            response = httpx.get(query_url, params={"slug": slug_value}, **request_kwargs)
+            response.raise_for_status()
         payload = response.json()
         items = _extract_market_items(payload)
         return _flatten_event_markets(items)
